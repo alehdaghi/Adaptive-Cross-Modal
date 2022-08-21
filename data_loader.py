@@ -44,7 +44,8 @@ class SYSUData(data.Dataset):
     def __len__(self):
         return len(self.train_color_label)
 
-    def rgb2gray(self, rgb):
+    @staticmethod
+    def rgb2gray(rgb):
         return np.dot(rgb[..., :3], [0.299, 0.587, 0.114]).astype(rgb.dtype)
 
     @staticmethod
@@ -127,10 +128,10 @@ class TestData(data.Dataset):
             img = img.resize((img_size[0], img_size[1]), Image.ANTIALIAS)
             pix_array = np.array(img)
             if colorToGray:
-                for j in range(9):
-                    test_image.append(np.stack((SYSUData.rgb2RandomChannel(pix_array),)*3, axis=-1))
-                    ret_test_label.append(test_label[i])
-                    ret_test_cam.append(test_cam[i])
+                #for j in range(9):
+                pix_array = np.stack((SYSUData.rgb2gray(pix_array),)*3, axis=-1)
+                # ret_test_label.append(test_label[i])
+                # ret_test_cam.append(test_cam[i])
 
             ret_test_cam.append(test_cam[i])
             ret_test_label.append(test_label[i])
