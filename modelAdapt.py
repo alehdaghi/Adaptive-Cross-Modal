@@ -116,8 +116,8 @@ class embed_net(nn.Module):
             # Layer 2
             NL2_counter = 0
             if len(self.NL_2_idx) == 0: self.NL_2_idx = [-1]
-            for i in range(len(self.base_resnet.layer2)):
-                x = self.base_resnet.layer2[i](x)
+            for i in range(len(self.base_resnet.resnet_part2[0])):
+                x = self.base_resnet.resnet_part2[0][i](x)
                 if i == self.NL_2_idx[NL2_counter]:
                     _, C, H, W = x.shape
                     x = self.NL_2[NL2_counter](x)
@@ -125,8 +125,8 @@ class embed_net(nn.Module):
             # Layer 3
             NL3_counter = 0
             if len(self.NL_3_idx) == 0: self.NL_3_idx = [-1]
-            for i in range(len(self.base_resnet.layer3)):
-                x = self.base_resnet.layer3[i](x)
+            for i in range(len(self.base_resnet.resnet_part2[1])):
+                x = self.base_resnet.resnet_part2[1][i](x)
                 if i == self.NL_3_idx[NL3_counter]:
                     _, C, H, W = x.shape
                     x = self.NL_3[NL3_counter](x)
@@ -135,8 +135,8 @@ class embed_net(nn.Module):
             cameraFeat = self.cameraFeat_module(x)
             NL4_counter = 0
             if len(self.NL_4_idx) == 0: self.NL_4_idx = [-1]
-            for i in range(len(self.base_resnet.layer4)):
-                x = self.base_resnet.layer4[i](x)
+            for i in range(len(self.base_resnet.resnet_part2[2])):
+                x = self.base_resnet.resnet_part2[2][i](x)
                 if i == self.NL_4_idx[NL4_counter]:
                     _, C, H, W = x.shape
                     x = self.NL_4[NL4_counter](x)
