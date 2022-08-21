@@ -98,7 +98,7 @@ class RegDBData(data.Dataset):
 
         img1,  target1 = self.train_color_image[self.cIndex[index]],  self.train_color_label[self.cIndex[index]]
         img2,  target2 = self.train_thermal_image[self.tIndex[index]], self.train_ir_label[self.tIndex[index]]
-        img3, target3 = -1, -1
+        img3, target3 = img1, -1
         if self.returnsGray:
             img3 = SYSUData.rgb2RandomChannel(img1)
             img3 = self.transform(np.stack((img3,) * 3, axis=-1))
