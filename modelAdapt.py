@@ -65,7 +65,7 @@ class embed_net(nn.Module):
         self.camera_bottleneck = nn.BatchNorm1d( self.pool_dim)
         self.camera_bottleneck.bias.requires_grad_(False)  # no shift
         nn.init.constant_(self.camera_bottleneck.bias, 0)
-        self.camera_classifier = nn.Linear(self.pool_dim, class_num, bias=False)
+        self.camera_classifier = nn.Linear(self.pool_dim, camera_num, bias=False)
         self.camera_bottleneck.apply(weights_init_kaiming)
         self.camera_classifier.apply(weights_init_classifier)
 
@@ -151,8 +151,8 @@ class embed_net(nn.Module):
 
 
         loss_body_cont, loss_cont, loss_mask = 0, 0, 0
-        if self.training:
-            camera_global = self.gl_pool(cameraFeat)
+
+        camera_global = self.gl_pool(cameraFeat)
 
 
         feat_pool = self.gl_pool(x)
@@ -162,11 +162,10 @@ class embed_net(nn.Module):
         if with_feature:
             return feat_pool, feat, camera_global, x, cameraFeat
 
+        cam_feat = self.camera_bottleneck(camera_global)
+
         if not self.training :
             return self.l2norm(feat), self.l2norm(feat_pool)
-
-
-        cam_feat = self.camera_bottleneck(camera_global)
         return feat_pool, self.classifier(feat), camera_global, self.camera_classifier(cam_feat)
 
 
