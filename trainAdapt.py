@@ -373,7 +373,7 @@ def train(epoch):
 
 
         cameras = torch.cat((cam1, cam2, cam1), 0).cuda()
-        loss_camID = criterion_id(camera_out0, cameras)
+        loss_camID = criterion_id(camera_out0, cameras-1)
 
         loss = loss + loss_camID * 0.5
         optimizer.zero_grad()
