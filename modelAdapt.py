@@ -152,7 +152,7 @@ class embed_net(nn.Module):
 
         loss_body_cont, loss_cont, loss_mask = 0, 0, 0
         person_mask = self.compute_mask(x)
-        cameraFeat = person_mask * (1-cameraFeat)
+        cameraFeat = (1-person_mask) * cameraFeat
 
         camera_global = self.gl_pool(cameraFeat)
 
