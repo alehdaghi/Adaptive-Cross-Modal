@@ -100,9 +100,9 @@ if not os.path.isdir(args.vis_log_path):
 
 suffix = dataset
 if args.method != 'base':
-    suffix = suffix + '_att_part_p{}_n{}_lr_{}_seed_{}'.format(args.num_pos, args.batch_size, args.lr, args.seed)
+    suffix = suffix + '_att_adapt_p{}_n{}_lr_{}_seed_{}'.format(args.num_pos, args.batch_size, args.lr, args.seed)
 else:
-    suffix = suffix + '_base_part_p{}_n{}_lr_{}_seed_{}'.format(args.num_pos, args.batch_size, args.lr, args.seed)
+    suffix = suffix + '_base_adapt_p{}_n{}_lr_{}_seed_{}'.format(args.num_pos, args.batch_size, args.lr, args.seed)
 
 
 if not args.optim == 'sgd':
