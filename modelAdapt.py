@@ -86,7 +86,7 @@ class embed_net(nn.Module):
 
 
 
-    def forward(self, x1, x2, x3=None, modal=0, with_feature = False):
+    def forward(self, x1, x2, x3=None, modal=0, with_feature = False, with_camID=False):
         if modal == 0:
             x1 = self.visible_module(x1)
             x2 = self.thermal_module(x2)
@@ -151,6 +151,8 @@ class embed_net(nn.Module):
 
 
         loss_body_cont, loss_cont, loss_mask = 0, 0, 0
+        person_mask = self.compute_mask(x)
+        cameraFeat = person_mask * (1-cameraFeat)
 
         camera_global = self.gl_pool(cameraFeat)
 
@@ -164,6 +166,8 @@ class embed_net(nn.Module):
 
         cam_feat = self.camera_bottleneck(camera_global)
 
+        if not self.training and with_camID:
+            return self.l2norm(feat), self.l2norm(feat_pool), self.camera_classifier(cam_feat)
         if not self.training :
             return self.l2norm(feat), self.l2norm(feat_pool)
         return feat_pool, self.classifier(feat), camera_global, self.camera_classifier(cam_feat)
@@ -185,7 +189,17 @@ class embed_net(nn.Module):
         return self.maskDetector(x)
 
     def getPoolDim(self):
-        return 2*self.pool_dim
+        return self.pool_dim
+
+    def compute_mask(self, feat):
+        batch_size, fdim, h, w = feat.shape
+        norms = torch.norm(feat, p=2, dim=1).view(batch_size, h*w)
+
+        norms -= norms.min(dim=-1, keepdim=True)[0]
+        norms /= norms.max(dim=-1, keepdim=True)[0] + 1e-12
+        mask = norms.view(batch_size, 1, h, w)
+
+        return mask.detach()
 
 
 
