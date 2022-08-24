@@ -29,8 +29,9 @@ class SYSUData(data.Dataset):
         img2,  target2, cam2 = self.train_ir_image[self.tIndex[index]], self.train_ir_label[self.tIndex[index]], self.train_ir_cam[self.tIndex[index]]
         img3, target3 = -1, -1
         if self.returnsGray:
-            img3 = self.rgb2RandomChannel(img1)
-            img3 = self.transform(np.stack((img3,)*3, axis=-1))
+            # img3 = self.rgb2gray(img1)
+            # img3 = self.transform(np.stack((img3,)*3, axis=-1))
+            img3 = self.transform(img1)
             target3 = target1
 
         img1 = self.transform(img1)
