@@ -83,6 +83,7 @@ class embed_net(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.gm_pool = gm_pool
 
+        self.adaptors = nn.Parameter(nn.Parameter(torch.ones(6, 2, 3)))
 
 
 
@@ -150,9 +151,9 @@ class embed_net(nn.Module):
 
 
 
-        loss_body_cont, loss_cont, loss_mask = 0, 0, 0
-        person_mask = self.compute_mask(x)
-        cameraFeat = (1-person_mask) * cameraFeat
+        if (self.training):
+            person_mask = self.compute_mask(x)
+            cameraFeat = (1-person_mask) * cameraFeat
 
         camera_global = self.gl_pool(cameraFeat)
 
@@ -162,7 +163,7 @@ class embed_net(nn.Module):
         feat = self.bottleneck(feat_pool)
 
         if with_feature:
-            return feat_pool, feat, camera_global, x, cameraFeat
+            return feat_pool, feat, x, camera_global, cameraFeat
 
         cam_feat = self.camera_bottleneck(camera_global)
 
@@ -191,7 +192,8 @@ class embed_net(nn.Module):
     def getPoolDim(self):
         return self.pool_dim
 
-    def compute_mask(self, feat):
+    @staticmethod
+    def compute_mask(feat):
         batch_size, fdim, h, w = feat.shape
         norms = torch.norm(feat, p=2, dim=1).view(batch_size, h*w)
 
@@ -202,9 +204,10 @@ class embed_net(nn.Module):
         return mask.detach()
 
 
-
     def count_params(self):
         ids = set(map(id, self.parameters()))
         params = filter(lambda p: id(p) in ids, self.parameters())
         return sum(p.numel() for p in params if p.requires_grad)
+
+
 
