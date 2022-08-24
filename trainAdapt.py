@@ -20,6 +20,7 @@ from sup_con_loss import SupConLoss
 from utils import *
 from loss import *
 from tensorboardX import SummaryWriter
+import einops
 
 parser = argparse.ArgumentParser(description='PyTorch Cross-Modality Training')
 parser.add_argument('--dataset', default='sysu', help='dataset name: regdb or sysu]')
@@ -146,10 +147,10 @@ print('==> Loading data..')
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 transform_train = transforms.Compose([
     transforms.ToPILImage(),
+    transforms.ToTensor(),
     transforms.Pad(10),
     transforms.RandomCrop((args.img_h, args.img_w)),
     transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
     normalize,
     ChannelRandomErasing(probability = 0.5)
 ])
@@ -307,12 +308,19 @@ def train(epoch):
 
     for batch_idx, (input1, input2, input3, label1, label2, _, cam1, cam2) in enumerate(trainloader):
 
+        cam3 = batch_idx % 2
         bs = label1.shape[0]
         input1 = Variable(input1.cuda())
         input2 = Variable(input2.cuda())
         if args.use_gray or args.uni == 3:
             labels = torch.cat((label1, label2, label1), 0)
             input3 = Variable(input3.cuda())
+            W = net.adaptors[tuple(cam1 - 1), cam3]
+            input3 = torch.einsum('b c h w, b c -> b h w', input3,
+                                  W/(W.sum(axis=1, keepdim=True)+1e-8))
+            cam3 = torch.ones_like(cam1) * ((cam3+1)*3)
+            input3 = einops.repeat(input3, 'b h w -> b c h w', c=3)
+
         else:
             input3 = None
             labels = torch.cat((label1, label2), 0)
@@ -372,7 +380,7 @@ def train(epoch):
             loss = loss_id + loss_tri + loss_color2gray #+ loss_center
 
 
-        cameras = torch.cat((cam1, cam2, cam1), 0).cuda()
+        cameras = torch.cat((cam1, cam2, cam3), 0).cuda()
         loss_camID = criterion_id(camera_out0, cameras-1)
 
         loss = loss + loss_camID * 0.5
