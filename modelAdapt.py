@@ -83,9 +83,12 @@ class embed_net(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.gm_pool = gm_pool
 
-        self.adaptors = nn.Parameter(nn.Parameter(torch.ones(6, 2, 3)))
+        self.adaptors = nn.Parameter(torch.ones(6, 2, 3))
+        # self.adaptors.register_hook(self.parameters_hook)
 
 
+    def parameters_hook(self, grad):
+        print("grad:", grad)
 
     def forward(self, x1, x2, x3=None, modal=0, with_feature = False, with_camID=False):
         if modal == 0:
