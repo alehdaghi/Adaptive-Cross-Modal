@@ -202,7 +202,7 @@ class embed_net(nn.Module):
                     NL3_counter += 1
             x3 = x
             # Layer 4
-            cameraFeat = self.cameraFeat_module(x)
+
             NL4_counter = 0
             if len(self.NL_4_idx) == 0: self.NL_4_idx = [-1]
             for i in range(len(self.base_resnet.resnet_part2[2])):
