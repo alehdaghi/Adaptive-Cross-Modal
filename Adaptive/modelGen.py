@@ -22,7 +22,7 @@ class ModelAdaptive(nn.Module):
         self.adaptor = Decoder(n_upsample=4, n_res=2, dim=1024, output_dim=3,res_norm='adain', activ='relu', pad_type='reflect')
         self.mlp = MLP(2048, get_num_adain_params(self.adaptor), 128, 1, norm='none', activ='relu')
 
-    def forward(self, xRGB, xIR, modal=0, with_feature = False, with_camID=False):
+    def forward(self, xRGB, xIR, modal=0, with_feature = False, with_camID=False, epoch=0):
 
         b = xRGB.shape[0]
         if not self.training:
@@ -31,7 +31,8 @@ class ModelAdaptive(nn.Module):
         cam_feat, cam_score = self.camera_id(x3, person_mask)
         adain_params = self.mlp(cam_feat[b:])
         assign_adain_params(adain_params, self.adaptor)
-        xAdapt = self.adaptor(x3[:b])
+        alpha = (max(epoch, 30)+1)/31
+        xAdapt = (1-alpha) * self.adaptor(x3[:b]) + alpha * torch.rand(b, 3 , 1 ,1).cuda()
         xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True)+1e-5).detach()
         xAdapt = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1,3,-1,-1)
 

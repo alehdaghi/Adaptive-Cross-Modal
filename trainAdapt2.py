@@ -327,7 +327,7 @@ def train(epoch):
         labels = Variable(labels.cuda())
         data_time.update(time.time() - end)
 
-        feat, out0, camera_feat, camera_out0 = net(input1, input2, modal=args.uni)
+        feat, out0, camera_feat, camera_out0 = net(input1, input2, modal=args.uni, epoch=epoch)
 
         loss_color2gray = torch.tensor(0.0, requires_grad=True, device=device)
         # if args.use_gray:
@@ -340,7 +340,7 @@ def train(epoch):
         loss_tri_gray = cross_triplet_creiteron(gray_feat, color_feat, thermal_feat,
                                                 gray_label, color_label, thermal_label)
         loss_tri = (loss_tri_color + loss_tri_thermal + loss_tri_gray) / 3
-        loss_color2gray = 10 * reconst_loss(color_feat, gray_feat)
+        loss_color2gray = 30 * reconst_loss(color_feat, gray_feat)
 
         # else:
         #     if args.uni != 0:
