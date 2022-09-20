@@ -36,7 +36,7 @@ class ModelAdaptive(nn.Module):
         xAdapt = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1,3,-1,-1)
 
         feat_poolAdapt, id_scoreAdapt, x3Adapt, person_maskAdapt = self.person_id(xRGB =None, xIR=xAdapt, modal=2, with_feature=with_feature)
-        cam_featAdapt, cam_scoreAdapt = self.camera_id(x3Adapt, person_maskAdapt)
+        cam_featAdapt, cam_scoreAdapt = self.camera_id(x3Adapt, person_mask[:b])
 
 
         return torch.cat((feat_pool, feat_poolAdapt), 0), torch.cat((id_score, id_scoreAdapt), 0),\
@@ -53,7 +53,7 @@ class Camera_net(nn.Module):
             self.pool_dim = 512
 
         #self.encoder = base_resnet(arch=arch).resnet_part2[2]  # layer4
-        self.encoder = base_resnet(arch=arch).resnet_part2[2][0:2]  # layer4
+        self.encoder = base_resnet(arch=arch).resnet_part2[2]  # layer4
 
         self.dim = 0
         # self.part_num = 5
