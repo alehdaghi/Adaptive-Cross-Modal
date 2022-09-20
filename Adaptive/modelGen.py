@@ -25,6 +25,8 @@ class ModelAdaptive(nn.Module):
     def forward(self, xRGB, xIR, modal=0, with_feature = False, with_camID=False):
 
         b = xRGB.shape[0]
+        if not self.training:
+            return self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=with_feature)
         feat_pool, id_score , x3, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=with_feature)
         cam_feat, cam_score = self.camera_id(x3, person_mask)
         adain_params = self.mlp(cam_feat[b:])
