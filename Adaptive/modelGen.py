@@ -32,17 +32,35 @@ class ModelAdaptive(nn.Module):
         adain_params = self.mlp(cam_feat[b:])
         assign_adain_params(adain_params, self.adaptor)
         xAdapt = self.adaptor(x3[:b])
-        xNorm = xAdapt / xAdapt.sum(dim=1, keepdim=True)
+        xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True)+1e-5).detach()
         xAdapt = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1,3,-1,-1)
 
-        feat_poolAdapt, id_scoreAdapt, x3Adapt, person_maskAdapt = self.person_id(xRGB =None, xIR=xAdapt, modal=2, with_feature=with_feature)
+        # self.freez_person()
+        feat_poolAdapt, id_scoreAdapt, x3Adapt, person_maskAdapt = self.person_id(xRGB =None, xIR = None, xZ=xAdapt, modal=3, with_feature=with_feature)
         cam_featAdapt, cam_scoreAdapt = self.camera_id(x3Adapt, person_mask[:b])
+        # self.unFreez_person()
 
 
         return torch.cat((feat_pool, feat_poolAdapt), 0), torch.cat((id_score, id_scoreAdapt), 0),\
                torch.cat((cam_feat, cam_featAdapt), 0), torch.cat((cam_score, cam_scoreAdapt), 0)
 
+    def freez_person(self):
+        self.person_id.base_resnet.train(False)
+        self.person_id.NL_1.train(False)
+        self.person_id.NL_2.train(False)
+        self.person_id.NL_3.train(False)
+        self.person_id.NL_4.train(False)
+        self.person_id.bottleneck.train(False)
+        self.person_id.classifier.train(False)
 
+    def unFreez_person(self):
+        self.person_id.base_resnet.train(True)
+        self.person_id.NL_1.train(True)
+        self.person_id.NL_2.train(True)
+        self.person_id.NL_3.train(True)
+        self.person_id.NL_4.train(True)
+        self.person_id.bottleneck.train(True)
+        self.person_id.classifier.train(True)
 class Camera_net(nn.Module):
     def __init__(self, camera_num=6, arch='resnet50'):
 
@@ -71,7 +89,7 @@ class Camera_net(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
 
-        self.adaptors = nn.Parameter(torch.ones(6, 2, 3))
+        # self.adaptors = nn.Parameter(torch.ones(6, 2, 3))
         # self.adaptors.register_hook(self.parameters_hook)
 
     def forward(self, x, person_mask):
@@ -96,6 +114,8 @@ class embed_net(nn.Module):
 
         self.thermal_module = ShallowModule(arch=arch)
         self.visible_module = ShallowModule(arch=arch)
+
+        self.z_module = ShallowModule(arch=arch)
 
         self.base_resnet = base_resnet(arch=arch)
 
@@ -134,13 +154,6 @@ class embed_net(nn.Module):
         self.bottleneck.apply(weights_init_kaiming)
         self.classifier.apply(weights_init_classifier)
 
-        self.camera_bottleneck = nn.BatchNorm1d( self.pool_dim)
-        self.camera_bottleneck.bias.requires_grad_(False)  # no shift
-        nn.init.constant_(self.camera_bottleneck.bias, 0)
-        self.camera_classifier = nn.Linear(self.pool_dim, camera_num, bias=False)
-        self.camera_bottleneck.apply(weights_init_kaiming)
-        self.camera_classifier.apply(weights_init_classifier)
-
         # self.bottleneck_parts = [nn.BatchNorm1d(self.pool_dim) for i in range(self.part_num)]
         # for btl in self.bottleneck_parts:
         #     btl.bias.requires_grad_(False)  # no shift
@@ -155,14 +168,14 @@ class embed_net(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.gm_pool = gm_pool
 
-        self.adaptors = nn.Parameter(torch.ones(6, 2, 3))
+        # self.adaptors = nn.Parameter(torch.ones(6, 2, 3))
         # self.adaptors.register_hook(self.parameters_hook)
 
 
     def parameters_hook(self, grad):
         print("grad:", grad)
 
-    def forward(self, xRGB, xIR, modal=0, with_feature = False, with_camID=False):
+    def forward(self, xRGB, xIR, xZ = None, modal=0, with_feature = False, with_camID=False):
         if modal == 0:
             x1 = self.visible_module(xRGB)
             x2 = self.thermal_module(xIR)
@@ -172,6 +185,8 @@ class embed_net(nn.Module):
             x = self.visible_module(xRGB)
         elif modal == 2:
             x = self.thermal_module(xIR)
+        elif modal == 3:
+            x = self.z_module(xZ)
 
 
         # shared block
@@ -220,9 +235,7 @@ class embed_net(nn.Module):
             x = self.base_resnet.resnet_part2[2](x) # layer4
 
         person_mask = self.compute_mask(x)
-
         feat_pool = self.gl_pool(x, self.gm_pool)
-
         feat = self.bottleneck(feat_pool)
 
         if with_feature:

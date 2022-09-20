@@ -259,15 +259,19 @@ criterion_contrastive = SupConLoss()
 if args.optim == 'sgd':
     ignored_params = list(map(id, net.person_id.bottleneck.parameters())) \
                      + list(map(id, net.person_id.classifier.parameters()))
-    ids = set(map(id, net.parameters()))
-    params = filter(lambda p: id(p) in ids, net.parameters())
+    ids = set(map(id, net.person_id.parameters()))
+    params = filter(lambda p: id(p) in ids, net.person_id.parameters())
     base_params = filter(lambda p: id(p) not in ignored_params, params)
 
     optimizer = optim.SGD([
         {'params': base_params, 'lr': 0.1 * args.lr},
+        {'params': net.camera_id.parameters(), 'lr': 0.1 * args.lr},
         {'params': net.person_id.bottleneck.parameters(), 'lr': args.lr},
         {'params': net.person_id.classifier.parameters(), 'lr': args.lr}],
         weight_decay=5e-4, momentum=0.9, nesterov=True)
+
+    gen_params = list(net.adaptor.parameters()) + list(net.mlp.parameters())
+    adaptor_optimizer = optim.Adam(gen_params, lr=0.0001, betas=(0.5, 0.999), weight_decay=0.0001)
 
 # exp_lr_scheduler = lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 def adjust_learning_rate(optimizer, epoch):
@@ -375,8 +379,10 @@ def train(epoch):
 
         loss = loss + loss_camID * 0.5
         optimizer.zero_grad()
+        adaptor_optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        adaptor_optimizer.step()
 
         # update P
         train_loss.update(loss.item(), 2 * input1.size(0))
