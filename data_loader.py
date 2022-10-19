@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from PIL import Image
 import torch.utils.data as data
 
@@ -25,8 +26,19 @@ class SYSUData(data.Dataset):
 
     def __getitem__(self, index):
 
-        img1,  target1, cam1 = self.train_color_image[self.cIndex[index]],  self.train_color_label[self.cIndex[index]], self.train_color_cam[self.cIndex[index]]
-        img2,  target2, cam2 = self.train_ir_image[self.tIndex[index]], self.train_ir_label[self.tIndex[index]], self.train_ir_cam[self.tIndex[index]]
+        c_index = self.cIndex[index]
+        t_index = self.tIndex[index]
+
+        if c_index != -1:
+            img1,  target1, cam1 = self.train_color_image[c_index],  self.train_color_label[c_index], self.train_color_cam[c_index]
+        else:
+            img1, target1, cam1 = self.train_color_image[0], -1, -1
+
+        if t_index != -1:
+            img2,  target2, cam2 = self.train_ir_image[t_index], self.train_ir_label[t_index], self.train_ir_cam[t_index]
+        else:
+            img2, target2, cam2 = self.train_ir_image[0], -1, -1
+
         img3, target3 = -1, -1
         if self.returnsGray:
             # img3 = self.rgb2gray(img1)
@@ -34,7 +46,9 @@ class SYSUData(data.Dataset):
             img3 = self.transform(img1)
             target3 = target1
 
+        # if target1 != -1:
         img1 = self.transform(img1)
+        # if target2 != -1:
         img2 = self.transform(img2)
 
         #if self.returnsGray:
