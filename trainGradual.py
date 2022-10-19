@@ -491,6 +491,7 @@ for step in range(0, N):
     print('==> Step {}'.format(step))
 
     ir_ids = np.random.choice(color_label, (step * color_label.size)//N, replace=False)
+    start_epoch = 0
     for epoch in range(start_epoch, 121//N):
 
         print('==> Preparing Data Loader...')
