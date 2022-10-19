@@ -237,6 +237,8 @@ class embed_net(nn.Module):
             if x2.shape[0] > 0:
                 x2 = self.thermal_module(x2)
                 x = torch.cat((x1, x2), 0)
+            else:
+                x = x1
             if x3 is not None :
                 x3 = self.gray_module(x3)
                 x = torch.cat((x, x3), 0)
