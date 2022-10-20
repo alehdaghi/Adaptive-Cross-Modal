@@ -5,6 +5,7 @@ import sys
 import os.path as osp
 import torch
 import time
+from functools import reduce
 
 def time_now():
     return time.strftime('%y-%m-%d %H:%M:%S', time.localtime())
@@ -112,8 +113,13 @@ class IdentitySamplerUnbalanced(Sampler):
         self.n_classes = len(uni_label)
         if ir_ids is None:
             ir_ids = uni_label
+        else:
+            uni_label = ir_ids
 
-        N = np.maximum(len(train_color_label), len(train_ir_label))
+        N1 = reduce(lambda s, a: s + len(a), [color_pos[i] for i in uni_label], 0)
+        N2 = reduce(lambda s, a: s + len(a), [thermal_pos[i] for i in ir_ids], 0)
+
+        N = np.maximum(N1, N2)
         for j in range(int(N / (batchSize * num_pos)) + 1):
             batch_idx = np.random.choice(uni_label, batchSize, replace=False)
             for i in range(batchSize):
@@ -219,3 +225,12 @@ def set_requires_grad(nets, requires_grad=False):
                 if net is not None:
                     for param in net.parameters():
                         param.requires_grad = requires_grad
+
+
+def next_IDs(model, N):
+    """ creates next intermediate domain by finding IDS with lower distance
+
+    Returns:
+        list of IDs
+    """
+

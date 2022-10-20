@@ -490,9 +490,10 @@ N = 5
 for step in range(0, N):
     print('==> Step {}'.format(step))
 
-    ir_ids = np.random.choice(color_label, (step * color_label.size)//N, replace=False)
+    ir_ids = np.random.choice(color_label, ((step+1) * color_label.size)//N, replace=False)
     start_epoch = 0
-    for epoch in range(start_epoch, 121//N):
+    end_epoch = 121//N
+    for epoch in range(start_epoch, end_epoch):
 
         print('==> Preparing Data Loader...')
         # identity sampler
@@ -512,7 +513,7 @@ for step in range(0, N):
         # training
         train(epoch, step)
 
-        if epoch >= 0 and epoch % 4 == 0:
+        if epoch >= 0 and epoch % 4 == 0 or epoch >= (end_epoch - 1):
             print('Test Epoch: {}'.format(epoch))
 
             # testing
