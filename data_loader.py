@@ -57,7 +57,7 @@ class SYSUData(data.Dataset):
         #    return img1, img2, img3, target1, target2, None#cam1-1, cam2-1
 
     def __len__(self):
-        return len(self.train_color_label)
+        return len(self.cIndex)
 
     @staticmethod
     def rgb2gray(rgb):
