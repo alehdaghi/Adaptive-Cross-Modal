@@ -235,6 +235,8 @@ def next_IDs(model, n, allIDs, currentIDs, trainset, color_pos, thermal_pos, tra
     """
     model.eval()
     availabeIDS = np.setdiff1d(allIDs, currentIDs)
+    if len(availabeIDS) <= n:
+        return availabeIDS
     # randomIDs = np.random.choice(availabeIDS, n, replace=False)
     dis={}
     with torch.no_grad():
