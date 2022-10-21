@@ -227,10 +227,27 @@ def set_requires_grad(nets, requires_grad=False):
                         param.requires_grad = requires_grad
 
 
-def next_IDs(model, N):
+def next_IDs(model, n, allIDs, currentIDs, trainset, color_pos, thermal_pos, transform_test):
     """ creates next intermediate domain by finding IDS with lower distance
 
     Returns:
         list of IDs
     """
+    model.eval()
+    availabeIDS = np.setdiff1d(allIDs, currentIDs)
+    # randomIDs = np.random.choice(availabeIDS, n, replace=False)
+    dis={}
+    with torch.no_grad():
+        for id in availabeIDS:
+            # f_c = torch.empty(len(color_pos[id]), model.pool_dim)
+            # t_c = torch.empty(len(thermal_pos[id]), model.pool_dim)
+            input_c = torch.stack([transform_test(trainset.train_color_image[i]) for i in color_pos[id]])
+            input_t = torch.stack([transform_test(trainset.train_ir_image[i]) for i in thermal_pos[id]])
+            feat_c = model(input_c.cuda(), None, modal=1)[0]
+            feat_t = model(None, input_t.cuda(), modal=2)[0]
+            dis[id] = torch.linalg.norm(feat_c.mean(dim=0) - feat_t.mean(dim=0)).item()
+            print("dist {} is {.4f}".format(id, dis[id]))
+
+    sortedIDs = [i[0] for i in sorted(dis.items(), key = lambda kv: kv[1])]
+    return sortedIDs[:n]
 

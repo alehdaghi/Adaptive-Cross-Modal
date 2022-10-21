@@ -2,6 +2,8 @@ from __future__ import print_function
 import argparse
 import sys
 import time
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -154,6 +156,19 @@ transform_train = transforms.Compose([
     normalize,
     ChannelRandomErasing(probability = 0.5)
 ])
+
+def updateTransform(p):
+    return transforms.Compose([
+    transforms.ToPILImage(),
+    transforms.Pad(10),
+    transforms.RandomCrop((args.img_h, args.img_w)),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    normalize,
+    ChannelRandomErasing(probability = p)
+])
+
+
 transform_test = transforms.Compose([
     transforms.ToPILImage(),
     transforms.Resize((args.img_h, args.img_w)),
@@ -188,6 +203,7 @@ elif dataset == 'regdb':
     query_img, query_label, query_cam = process_test_regdb(data_path, trial=args.trial, modal='visible')
     gall_img, gall_label, gall_cam = process_test_regdb(data_path, trial=args.trial, modal='thermal')
 
+trainset.transform = updateTransform(0.2)
 gallset = TestData(gall_img, gall_label, gall_cam, transform=transform_test, img_size=(args.img_w, args.img_h), colorToGray= args.uni == 3)
 queryset = TestData(query_img, query_label, query_cam, transform=transform_test, img_size=(args.img_w, args.img_h), colorToGray= args.uni == 3)
 
@@ -484,15 +500,17 @@ def test(epoch):
 
 
 color_label = np.unique(trainset.train_color_label)
+ir_ids = np.empty(0,dtype=int)
 # training
 print('==> Start Training...')
 N = 5
 for step in range(0, N):
     print('==> Step {}'.format(step))
-
-    ir_ids = np.random.choice(color_label, ((step+1) * color_label.size)//N, replace=False)
+    ir_ids = next_IDs(net, ((step+1) * color_label.size)//N, color_label, ir_ids, trainset,
+                      color_pos, thermal_pos, transform_test)
+    # ir_ids = np.random.choice(color_label, ((step+1) * color_label.size)//N, replace=False)
     start_epoch = 0
-    end_epoch = 121//N
+    end_epoch = 20 * (step + 1)
     for epoch in range(start_epoch, end_epoch):
 
         print('==> Preparing Data Loader...')
@@ -503,6 +521,7 @@ for step in range(0, N):
 
         trainset.cIndex = sampler.index1  # color index
         trainset.tIndex = sampler.index2  # thermal index
+        trainset.transform = updateTransform(0.2 + step / N * 0.4 )
         print(epoch)
         print(trainset.cIndex)
         print(trainset.tIndex)
