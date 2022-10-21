@@ -246,7 +246,7 @@ def next_IDs(model, n, allIDs, currentIDs, trainset, color_pos, thermal_pos, tra
             feat_c = model(input_c.cuda(), None, modal=1)[0]
             feat_t = model(None, input_t.cuda(), modal=2)[0]
             dis[id] = torch.linalg.norm(feat_c.mean(dim=0) - feat_t.mean(dim=0)).item()
-            print("dist {} is {.4%}".format(id, dis[id]))
+            print("dist {} is {:.4%}".format(id, dis[id]))
 
     sortedIDs = [i[0] for i in sorted(dis.items(), key = lambda kv: kv[1])]
     return sortedIDs[:n]
