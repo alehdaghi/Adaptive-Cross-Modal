@@ -508,7 +508,7 @@ for step in range(0, N):
     print('==> Step {}'.format(step))
     selectedIDs = next_IDs(net, color_label.size//N+1, color_label, ir_ids, trainset,
                       color_pos, thermal_pos, transform_test)
-    ir_ids = ir_ids.append(selectedIDs)
+    ir_ids.append(selectedIDs)
     # ir_ids = np.random.choice(color_label, ((step+1) * color_label.size)//N, replace=False)
     start_epoch = 0
     end_epoch = 20 * (step + 1)
