@@ -232,13 +232,17 @@ class embed_net(nn.Module):
         self.gm_pool = gm_pool
 
     def forward(self, x1, x2, x3=None, modal=0, with_feature = False):
+
         if modal == 0:
-            x1 = self.visible_module(x1)
+            x = torch.Tensor().cuda()
+            if x1.shape[0] > 0:
+                x1 = self.visible_module(x1)
+                x = torch.cat((x, x1), 0)
+
             if x2.shape[0] > 0:
                 x2 = self.thermal_module(x2)
-                x = torch.cat((x1, x2), 0)
-            else:
-                x = x1
+                x = torch.cat((x, x2), 0)
+
             if x3 is not None :
                 x3 = self.gray_module(x3)
                 x = torch.cat((x, x3), 0)
