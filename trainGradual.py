@@ -513,7 +513,7 @@ for step in range(0, N):
     color_ids = np.setdiff1d(all_ids, ir_ids)
     # ir_ids = np.random.choice(color_label, ((step+1) * color_label.size)//N, replace=False)
     start_epoch = 0
-    end_epoch = 20 * (step + 1)
+    end_epoch = 1
     for epoch in range(start_epoch, end_epoch):
 
         print('==> Preparing Data Loader...')
