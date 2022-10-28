@@ -501,7 +501,7 @@ def test(epoch):
 
 all_ids = np.unique(trainset.train_color_label)
 color_ids = np.unique(trainset.train_color_label)
-ir_ids = []
+ir_ids = np.empty(0, dtype=int)
 # training
 print('==> Start Training...')
 N = 5
