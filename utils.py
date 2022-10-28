@@ -108,22 +108,30 @@ class IdentitySamplerUnbalanced(Sampler):
             batchSize: batch size
     """
 
-    def __init__(self, train_color_label, train_ir_label, color_pos, thermal_pos, num_pos, batchSize, ir_ids=None):
+    def __init__(self, train_color_label, train_ir_label, color_pos, thermal_pos, num_pos, batchSize, ir_ids=None, color_ids=None):
         uni_label = np.unique(train_color_label)
-        self.n_classes = len(uni_label)
-        if ir_ids is None:
+        if ir_ids is None :
             ir_ids = uni_label
-        else:
-            uni_label = ir_ids
+        if color_ids is None:
+            color_ids = ir_ids
 
-        N1 = reduce(lambda s, a: s + len(a), [color_pos[i] for i in uni_label], 0)
+
+        uni_label = np.unique(np.append(color_ids, ir_ids))
+
+        self.n_classes = len(uni_label)
+
+        N1 = reduce(lambda s, a: s + len(a), [color_pos[i] for i in color_ids], 0)
         N2 = reduce(lambda s, a: s + len(a), [thermal_pos[i] for i in ir_ids], 0)
 
         N = np.maximum(N1, N2)
         for j in range(int(N / (batchSize * num_pos)) + 1):
             batch_idx = np.random.choice(uni_label, batchSize, replace=False)
             for i in range(batchSize):
-                sample_color = np.random.choice(color_pos[batch_idx[i]], num_pos)
+                if batch_idx[i] in color_ids:
+                    sample_color = np.random.choice(color_pos[batch_idx[i]], num_pos)
+                else:
+                    sample_color = np.asarray([-1] * num_pos)
+
                 if batch_idx[i] in ir_ids:
                     sample_thermal = np.random.choice(thermal_pos[batch_idx[i]], num_pos)
                 else:
@@ -250,6 +258,6 @@ def next_IDs(model, n, allIDs, currentIDs, trainset, color_pos, thermal_pos, tra
             dis[id] = torch.linalg.norm(feat_c.mean(dim=0) - feat_t.mean(dim=0)).item()
             print("dist {} is {:.4f}".format(id, dis[id]))
 
-    sortedIDs = [i[0] for i in sorted(dis.items(), key = lambda kv: kv[1])]
+    sortedIDs = np.asarray([i[0] for i in sorted(dis.items(), key = lambda kv: kv[1])])
     return sortedIDs[:n]
 
