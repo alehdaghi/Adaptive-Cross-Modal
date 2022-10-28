@@ -402,11 +402,11 @@ def train(epoch, step):
         optimizer.step()
 
         # update P
-        train_loss.update(loss.item(), 2 * input1.size(0))
-        id_loss.update(loss_id.item(), 2 * input1.size(0))
-        tri_loss.update(loss_tri.item(), 2 * input1.size(0))
-        gray_loss.update(loss_color2gray.item(), 2 * input1.size(0))
-        # center_loss.update(loss_cont.item(), 2 * input1.size(0))
+        train_loss.update(loss.item(), feat.size(0))
+        id_loss.update(loss_id.item(), feat.size(0))
+        tri_loss.update(loss_tri.item(), feat.size(0))
+        gray_loss.update(loss_color2gray.item(), feat.size(0))
+        # center_loss.update(loss_cont.item(), feat.size(0))
         total += labels.size(0)
 
         # measure elapsed time
