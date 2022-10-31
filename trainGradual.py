@@ -510,7 +510,7 @@ for step in range(0, N):
     selectedIDs = next_IDs(net, all_ids.size // N + 1, all_ids, ir_ids, trainset,
                            color_pos, thermal_pos, transform_test)
     ir_ids = np.append(ir_ids, selectedIDs)
-    color_ids = np.setdiff1d(all_ids, ir_ids)
+    color_ids = ir_ids #np.setdiff1d(all_ids, ir_ids)
     # ir_ids = np.random.choice(color_label, ((step+1) * color_label.size)//N, replace=False)
     start_epoch = 0
     end_epoch = 1
