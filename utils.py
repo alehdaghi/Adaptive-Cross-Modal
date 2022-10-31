@@ -6,6 +6,8 @@ import os.path as osp
 import torch
 import time
 from functools import reduce
+from sklearn import metrics
+
 
 def time_now():
     return time.strftime('%y-%m-%d %H:%M:%S', time.localtime())
@@ -235,12 +237,29 @@ def set_requires_grad(nets, requires_grad=False):
                         param.requires_grad = requires_grad
 
 
+def mmd_rbf(X, Y, gamma=1.0):
+    """MMD using rbf (gaussian) kernel (i.e., k(x,y) = exp(-gamma * ||x-y||^2 / 2))
+    Arguments:
+        X {[n_sample1, dim]} -- [X matrix]
+        Y {[n_sample2, dim]} -- [Y matrix]
+    Keyword Arguments:
+        gamma {float} -- [kernel parameter] (default: {1.0})
+    Returns:
+        [scalar] -- [MMD value]
+    """
+    XX = metrics.pairwise.rbf_kernel(X, X, gamma)
+    YY = metrics.pairwise.rbf_kernel(Y, Y, gamma)
+    XY = metrics.pairwise.rbf_kernel(X, Y, gamma)
+    return XX.mean() + YY.mean() - 2 * XY.mean()
+
+
 def next_IDs(model, n, allIDs, currentIDs, trainset, color_pos, thermal_pos, transform_test):
     """ creates next intermediate domain by finding IDS with lower distance
 
     Returns:
         list of IDs
     """
+    return allIDs
     model.eval()
     availabeIDS = np.setdiff1d(allIDs, currentIDs)
     if len(availabeIDS) <= n:
@@ -255,7 +274,8 @@ def next_IDs(model, n, allIDs, currentIDs, trainset, color_pos, thermal_pos, tra
             input_t = torch.stack([transform_test(trainset.train_ir_image[i]) for i in thermal_pos[id]])
             feat_c = model(input_c.cuda(), None, modal=1)[0]
             feat_t = model(None, input_t.cuda(), modal=2)[0]
-            dis[id] = torch.linalg.norm(feat_c.mean(dim=0) - feat_t.mean(dim=0)).item()
+            #dis[id] = torch.linalg.norm(feat_c.mean(dim=0) - feat_t.mean(dim=0)).item()
+            dis[id] = mmd_rbf(feat_c.detach().cpu().numpy(), feat_t.detach().cpu().numpy())
             print("dist {} is {:.4f}".format(id, dis[id]))
 
     sortedIDs = np.asarray([i[0] for i in sorted(dis.items(), key = lambda kv: kv[1])])
