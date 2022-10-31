@@ -259,7 +259,7 @@ def next_IDs(model, n, allIDs, currentIDs, trainset, color_pos, thermal_pos, tra
     Returns:
         list of IDs
     """
-    return allIDs
+    # return allIDs
     model.eval()
     availabeIDS = np.setdiff1d(allIDs, currentIDs)
     if len(availabeIDS) <= n:
