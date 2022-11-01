@@ -191,7 +191,7 @@ if dataset == 'sysu':
     elif args.uni == 3:
         args.mode = 'Gray'
     query_img, query_label, query_cam = process_query_sysu(data_path, mode=args.mode)
-    gall_img, gall_label, gall_cam = process_gallery_sysu(data_path, mode=args.mode, trial=0)
+    gall_img, gall_label, gall_cam = process_gallery_sysu(data_path, mode=args.mode, trial=0, single_shot=False)
 
 elif dataset == 'regdb':
     # training set
@@ -543,9 +543,10 @@ for step in range(-1, N):
             # testing
             cmc, mAP, mINP, cmc_att, mAP_att, mINP_att = test(epoch)
             # save model
-            if max(cmc[0], cmc_att[0]) > best_acc:  # not the real best for sysu-mm01
-                best_acc = max(cmc[0], cmc_att[0])
+            if max(mAP, mAP_att) > best_acc:  # not the real best for sysu-mm01
+                best_acc = max(mAP, mAP_att)
                 best_epoch = epoch
+                best_step = step
                 state = {
                     'net': net.state_dict(),
                     'cmc': cmc_att,
@@ -569,4 +570,4 @@ for step in range(-1, N):
                 cmc[0], cmc[4], cmc[9], cmc[19], mAP, mINP))
             print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}| mINP: {:.2%}'.format(
                 cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att, mINP_att))
-            print('Best Epoch [{}]'.format(best_epoch))
+            print('Best Epoch [{},{}]'.format(best_epoch, best_step))
