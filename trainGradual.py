@@ -515,7 +515,7 @@ for step in range(-1, N):
 
     # ir_ids = np.random.choice(color_label, ((step+1) * color_label.size)//N, replace=False)
     start_epoch = 0
-    end_epoch = 1
+    end_epoch = 20 if step <= 0 or step >= N-1 else 2
     for epoch in range(start_epoch, end_epoch):
 
         print('==> Preparing Data Loader...')
