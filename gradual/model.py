@@ -226,6 +226,11 @@ class embed_net(nn.Module):
 
         self.classifier = nn.Linear(self.pool_dim, class_num, bias=False)
 
+        self.N = 4
+        self.classifiers = nn.ModuleList([nn.Linear(self.pool_dim//self.N, class_num, bias=False) for i in range(self.N)])
+        [self.classifiers[i].apply(weights_init_classifier) for i in range(self.N)]
+
+
         self.bottleneck.apply(weights_init_kaiming)
         self.classifier.apply(weights_init_classifier)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
@@ -305,8 +310,11 @@ class embed_net(nn.Module):
         feat = self.bottleneck(x_pool)
 
         retX_pool = x_pool
-        retFeat = self.classifier(feat)
+        clsScore = self.classifier(feat)
 
+        detailFeat = feat.split(self.pool_dim // self.N, dim=1)
+        detailScore = [self.classifiers[i](featSec) for i, featSec in enumerate(detailFeat)]
+        clsScore = 0.5 * clsScore + 0.5*torch.stack(detailScore).mean(dim=0)
 
         if with_feature:
             return x_pool, feat, None, x, None
@@ -317,7 +325,7 @@ class embed_net(nn.Module):
             cont_x = self.contrastive_output_layer(cont_x)
             cont_x = F.normalize(cont_x, dim=1)
         if self.training :
-            return retX_pool, retFeat, cont_x
+            return retX_pool, clsScore, cont_x
         else:
             return self.l2norm(x_pool), self.l2norm(feat)
 
