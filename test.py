@@ -10,7 +10,7 @@ from data_loader import SYSUData, RegDBData, TestData
 from data_manager import *
 from eval_metrics import eval_sysu, eval_regdb
 from loss import pdist_np
-from model import embed_net
+from gradual.model import embed_net
 from modelPart import embed_net as embed_net_part
 from utils import *
 import pdb
@@ -77,7 +77,7 @@ if dataset == 'sysu':
 
 elif dataset =='regdb':
     data_path = '../Datasets/RegDB/'
-    n_class = 395
+    n_class = 206
     test_mode = [2, 1]
  
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -86,7 +86,7 @@ start_epoch = 0
 
 print('==> Building model..')
 if args.method =='base':
-    net = embed_net_part(n_class, no_local= 'off', gm_pool =  'off', arch=args.arch)
+    net = embed_net(n_class, no_local= 'off', gm_pool =  'off', arch=args.arch)
     # print(net.count_params())
 else:
     net = embed_net(n_class, no_local= 'on', gm_pool = 'on', arch=args.arch, use_contrast=args.cont_loss)
@@ -169,7 +169,7 @@ if len(args.resume) > 0:
     if os.path.isfile(model_path):
         print('==> loading checkpoint {}'.format(args.resume))
         checkpoint = torch.load(model_path)
-        net.load_state_dict(checkpoint['net'])
+        net.load_state_dict(checkpoint['net'], strict=False)
         print('==> loaded checkpoint {} (epoch {})'
 
               .format(args.resume, checkpoint['epoch']))
