@@ -526,7 +526,7 @@ for step in range(-1, N):
 
         trainset.cIndex = sampler.index1  # color index
         trainset.tIndex = sampler.index2  # thermal index
-        trainset.transform = updateTransform(0.2 + step / N * 0.4 )
+        trainset.transform = updateTransform(0) #0.2 + step / N * 0.4 )
         print(epoch)
         print(trainset.cIndex)
         print(trainset.tIndex)
