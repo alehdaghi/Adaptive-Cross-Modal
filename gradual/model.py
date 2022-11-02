@@ -312,9 +312,9 @@ class embed_net(nn.Module):
         retX_pool = x_pool
         clsScore = self.classifier(feat)
 
-        detailFeat = feat.split(self.pool_dim // self.N, dim=1)
-        detailScore = [self.classifiers[i](featSec) for i, featSec in enumerate(detailFeat)]
-        clsScore = 0.5 * clsScore + 0.5*torch.stack(detailScore).mean(dim=0)
+        # detailFeat = feat.split(self.pool_dim // self.N, dim=1)
+        # detailScore = [self.classifiers[i](featSec) for i, featSec in enumerate(detailFeat)]
+        # clsScore = 0.5 * clsScore + 0.5*torch.stack(detailScore).mean(dim=0)
 
         if with_feature:
             return x_pool, feat, None, x, None
