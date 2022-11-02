@@ -226,9 +226,9 @@ class embed_net(nn.Module):
 
         self.classifier = nn.Linear(self.pool_dim, class_num, bias=False)
 
-        self.N = 4
-        self.classifiers = nn.ModuleList([nn.Linear(self.pool_dim//self.N, class_num, bias=False) for i in range(self.N)])
-        [self.classifiers[i].apply(weights_init_classifier) for i in range(self.N)]
+        # self.N = 4
+        # self.classifiers = nn.ModuleList([nn.Linear(self.pool_dim//self.N, class_num, bias=False) for i in range(self.N)])
+        # [self.classifiers[i].apply(weights_init_classifier) for i in range(self.N)]
 
 
         self.bottleneck.apply(weights_init_kaiming)

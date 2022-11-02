@@ -165,7 +165,7 @@ def updateTransform(p):
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     normalize,
-    ChannelRandomErasing(probability = p)
+    ChannelRandomErasing(probability = p, sl = 0.01, sh = 0.2)
 ])
 
 
@@ -515,7 +515,7 @@ for step in range(-1, N):
 
     # ir_ids = np.random.choice(color_label, ((step+1) * color_label.size)//N, replace=False)
     start_epoch = 0
-    end_epoch = 20 if step <= 0 or step >= N-1 else 2
+    end_epoch = 20 #if step <= 0 or step >= N-1 else 2
     for epoch in range(start_epoch, end_epoch):
 
         print('==> Preparing Data Loader...')
@@ -526,7 +526,7 @@ for step in range(-1, N):
 
         trainset.cIndex = sampler.index1  # color index
         trainset.tIndex = sampler.index2  # thermal index
-        trainset.transform = updateTransform(0) #0.2 + step / N * 0.4 )
+        trainset.transform = updateTransform(0.3 + (step / N) * (epoch / end_epoch) * 0.6 )
         print(epoch)
         print(trainset.cIndex)
         print(trainset.tIndex)
