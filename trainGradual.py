@@ -263,13 +263,18 @@ else:
 cross_triplet_creiteron = TripletLoss(0.3, 'euclidean')
 reconst_loss = nn.MSELoss()
 hetro_loss = HetroCenterLoss()
-hctriplet = HcTripletLoss(margin=0.8)
+hctriplet = HcTripletLoss(margin=0.3)
 
+twinsloss = BarlowTwins_loss(batch_size=loader_batch, margin=args.margin)
 
 criterion_id.to(device)
 criterion_tri.to(device)
 cross_triplet_creiteron.margin_loss.to(device)
 reconst_loss.to(device)
+hctriplet.to(device)
+
+twinsloss.to(device)
+
 
 criterion_contrastive = SupConLoss()
 
@@ -374,8 +379,10 @@ def train(epoch, step):
             # loss_tri_thermal = cross_triplet_creiteron(thermal_feat, color_feat, color_feat,
             #                                            thermal_label, color_label, color_label)
             # loss_tri = (loss_tri_color + loss_tri_thermal) / 2
-            loss_tri = cross_triplet_creiteron(feat, feat, feat,
-                                               labels, labels, labels)
+            loss_tri, correct = hctriplet(feat, labels)
+            loss_twins = twinsloss(feat, labels)
+            # loss_tri = cross_triplet_creiteron(feat, feat, feat,
+            #                                    labels, labels, labels)
 
         loss_id = criterion_id(out0, labels)
         #loss_tri, batch_acc = criterion_tri(feat, labels)
@@ -395,7 +402,7 @@ def train(epoch, step):
             loss_cont = criterion_contrastive(p)
             loss = loss_cont + loss_id + loss_color2gray
         else:
-            loss = loss_id + loss_tri + loss_color2gray #+ loss_center
+            loss = loss_id + loss_tri + loss_color2gray + loss_twins #+ loss_center
 
         optimizer.zero_grad()
         loss.backward()

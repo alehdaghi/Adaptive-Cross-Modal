@@ -475,3 +475,38 @@ def cross_triplet_with_gray(feat, labels, margin=0.3, metric= 'euclidean'):
     loss_color2gray = F.mse_loss(color_feat, gray_feat)
     return (loss_tri_color + loss_tri_thermal + loss_tri_gray) / 3 ,\
            loss_color2gray
+
+def off_diagonal(x):
+    # return a flattened view of the off-diagonal elements of a square matrix
+    n, m = x.shape
+    assert n == m
+    return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+
+class BarlowTwins_loss(nn.Module):
+    def __init__(self, batch_size, margin=0.3):
+        super(BarlowTwins_loss, self).__init__()
+        self.margin = margin
+        self.ranking_loss = nn.MarginRankingLoss(margin=margin)
+
+        # projector
+
+    def forward(self, inputs, targets):
+
+        # normalization layer for the representations z1 and z2
+        # z1 = nn.BatchNorm1d(input1)
+        # z2 = nn.BatchNorm1d(input2)
+
+        # inputs = torch.tensor([item.cpu().detach().numpy() for item in inputs]).cuda()
+
+        feat_V, feat_T = torch.chunk(inputs, 2, dim=0)
+        c = feat_V.T @ feat_T  # empirical cross-correlation matrix
+
+        n = inputs.size(0)
+
+        c.div_(n) # sum the cross-correlation matrix between all gpus
+
+        on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
+        off_diag = off_diagonal(c).pow_(2).sum()
+        # off_diag
+        loss = (on_diag + 0.051 * off_diag) / 2048
+        return loss
