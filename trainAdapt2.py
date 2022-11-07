@@ -152,7 +152,7 @@ transform_train = transforms.Compose([
     transforms.RandomCrop((args.img_h, args.img_w)),
     transforms.RandomHorizontalFlip(),
     normalize,
-    ChannelRandomErasing(probability = 0.5)
+    # ChannelRandomErasing(probability = 0.5)
 ])
 transform_test = transforms.Compose([
     transforms.ToPILImage(),
@@ -246,7 +246,7 @@ else:
 cross_triplet_creiteron = TripletLoss(0.3, 'euclidean')
 reconst_loss = nn.MSELoss()
 hetro_loss = HetroCenterLoss()
-hctriplet = HcTripletLoss(margin=0.8)
+hctriplet = HcTripletLoss(margin=0.3)
 
 
 criterion_id.to(device)
@@ -329,31 +329,13 @@ def train(epoch):
 
         feat, out0, camera_feat, camera_out0 = net(input1, input2, modal=args.uni, epoch=epoch)
 
-        loss_color2gray = torch.tensor(0.0, requires_grad=True, device=device)
-        # if args.use_gray:
-        color_feat, thermal_feat, gray_feat = torch.split(feat, label1.shape[0])
-        color_label, thermal_label, gray_label = torch.split(labels, label1.shape[0])
-        loss_tri_color = cross_triplet_creiteron(color_feat, thermal_feat, gray_feat,
-                                                 color_label, thermal_label, gray_label)
-        loss_tri_thermal = cross_triplet_creiteron(thermal_feat, gray_feat, color_feat,
-                                                   thermal_label, gray_label, color_label)
-        loss_tri_gray = cross_triplet_creiteron(gray_feat, color_feat, thermal_feat,
-                                                gray_label, color_label, thermal_label)
-        loss_tri = (loss_tri_color + loss_tri_thermal + loss_tri_gray) / 3
-        loss_color2gray = 30 * reconst_loss(color_feat, gray_feat)
 
-        # else:
-        #     if args.uni != 0:
-        #         color_feat, thermal_feat = feat, feat
-        #         color_label, thermal_label = labels, labels
-        #     else:
-        #         color_feat, thermal_feat = torch.split(feat, bs)
-        #         color_label, thermal_label = torch.split(labels, bs)
-        #     loss_tri_color = cross_triplet_creiteron(color_feat, thermal_feat, thermal_feat,
-        #                                              color_label, thermal_label, thermal_label)
-        #     loss_tri_thermal = cross_triplet_creiteron(thermal_feat, color_feat, color_feat,
-        #                                                thermal_label, color_label, color_label)
-        #     loss_tri = (loss_tri_color + loss_tri_thermal) / 2
+        color_feat, thermal_feat, gray_feat = torch.split(feat, label1.shape[0])
+        color_cam_feat, thermal_cam_feat, gray_cam_feat = torch.split(camera_feat, label1.shape[0])
+
+        loss_tri, _ = hctriplet (feat, labels)
+        loss_color2gray = 30 * reconst_loss(color_feat, gray_feat)
+        loss_thermal2gray = 30 * reconst_loss(thermal_cam_feat, gray_cam_feat)
 
         loss_id = criterion_id(out0, labels)
 
@@ -366,18 +348,11 @@ def train(epoch):
         _, predicted = out0.max(1)
         correct += (predicted.eq(labels).sum().item() / 2)
 
-        if args.cont_loss:
-            feat = torch.cat([F.normalize(color_feat, dim=1).unsqueeze(1), F.normalize(thermal_feat, dim=1).unsqueeze(1)], dim=1)
-            loss_cont = criterion_contrastive(feat, labels[:bs])
-            loss = loss_cont + loss_id
-        else:
-            loss = loss_id + loss_tri + loss_color2gray #+ loss_center
-
-
+        loss = loss_id + loss_tri + loss_color2gray #+ loss_center
 
         loss_camID = criterion_id(camera_out0, cameras-1)
 
-        loss = loss + loss_camID * 0.5
+        loss = loss + (loss_camID + loss_thermal2gray) * 0.5
         optimizer.zero_grad()
         adaptor_optimizer.zero_grad()
         loss.backward()
@@ -389,7 +364,7 @@ def train(epoch):
         id_loss.update(loss_id.item(), 2 * input1.size(0))
         tri_loss.update(loss_tri.item(), 2 * input1.size(0))
         gray_loss.update(loss_color2gray.item(), 2 * input1.size(0))
-        camera_loss.update(loss_camID.item(), 2 * input1.size(0))
+        camera_loss.update(loss_camID.item() + loss_thermal2gray.item(), 2 * input1.size(0))
         # part_loss.update(partsMap['loss_body_cont'].item(), 2 * input1.size(0))
         total += labels.size(0)
 

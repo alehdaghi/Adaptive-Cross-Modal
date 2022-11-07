@@ -1,67 +1,104 @@
+import cv2
 import torch
 import torch.nn as nn
 from einops import rearrange
 from torch.nn import init
 from torch.nn import functional as F
 
-from model import ShallowModule, make_conv_params_same, base_resnet,\
-    Non_local, Normalize, weights_init_kaiming,weights_init_classifier
+from model import ShallowModule, make_conv_params_same, base_resnet, \
+    Non_local, Normalize, weights_init_kaiming, weights_init_classifier
 from Adaptive.Networks import Decoder, MLP, assign_adain_params, get_num_adain_params
 from resnet import resnet50, resnet18
 import torchvision
 import copy
+import numpy as np
 
 from sup_con_loss import SupConLoss
+import torchvision.transforms as transforms
+
+class Between(object):
+    """
+    truncate between range [0, 1].
+    """
+    def __call__(self, tensor):
+        tensor[tensor < 0] = 0
+        tensor[tensor > 1] = 1
+        return tensor
+
+invTrans = transforms.Compose([
+    transforms.Normalize(mean=[0., 0., 0.], std=[1 / 0.229, 1 / 0.224, 1 / 0.225]),
+    transforms.Normalize(mean=[-0.485, -0.456, -0.406], std=[1., 1., 1.]),
+    Between(),
+    transforms.ToPILImage()
+])
 
 
 class ModelAdaptive(nn.Module):
-    def __init__(self,  class_num, no_local= 'on', gm_pool = 'on', arch='resnet50', camera_num=6):
+    def __init__(self, class_num, no_local='on', gm_pool='on', arch='resnet50', camera_num=6):
         super(ModelAdaptive, self).__init__()
         self.person_id = embed_net(class_num, no_local, gm_pool, arch)
         self.camera_id = Camera_net(camera_num, arch)
-        self.adaptor = Decoder(n_upsample=4, n_res=2, dim=1024, output_dim=3,res_norm='adain', activ='relu', pad_type='reflect')
+        self.adaptor = Decoder(n_upsample=4, n_res=2, dim=1024, output_dim=3, res_norm='adain', activ='relu',
+                               pad_type='reflect')
         self.mlp = MLP(2048, get_num_adain_params(self.adaptor), 128, 1, norm='none', activ='relu')
 
-    def forward(self, xRGB, xIR, modal=0, with_feature = False, with_camID=False, epoch=0):
+    def forward(self, xRGB, xIR, modal=0, with_feature=False, with_camID=False, epoch=0):
 
         b = xRGB.shape[0]
-        if not self.training:
+        if not self.training and with_feature == False:
             return self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=with_feature)
-        feat_pool, id_score , x3, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=with_feature)
+        if with_feature:
+            feat_pool, feat, x, x3, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=modal,
+                                                                 with_feature=True)
+        else:
+            feat_pool, id_score, x3, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=False)
+
         cam_feat, cam_score = self.camera_id(x3, person_mask)
         adain_params = self.mlp(cam_feat[b:])
         assign_adain_params(adain_params, self.adaptor)
-        alpha = (max(epoch, 30)+1)/31
-        xAdapt = (1-alpha) * self.adaptor(x3[:b]) + alpha * torch.rand(b, 3 , 1 ,1).cuda()
-        xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True)+1e-5).detach()
-        xAdapt = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1,3,-1,-1)
+        alpha = (min(epoch, 30) + 1) / 31
+        xAdapt = (alpha) * self.adaptor(x3[:b]) + (1-alpha) * torch.rand(b, 3, 1, 1).cuda()
+        xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5).detach()
+        xAdapt = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
 
-        # self.freez_person()
-        feat_poolAdapt, id_scoreAdapt, x3Adapt, person_maskAdapt = self.person_id(xRGB =None, xIR = None, xZ=xAdapt, modal=3, with_feature=with_feature)
+        for i in range(b):
+            invTrans(xNorm[i].detach()).save('images/N' + str(i) + '.png')
+            invTrans(xAdapt[i].detach()).save('images/Z' + str(i) + '.png')
+            invTrans(xRGB[i].detach()).save('images/V' + str(i) + '.png')
+            invTrans(xIR[i].detach()).save('images/T' + str(i) + '.png')
+
+            # cv2.imwrite('Z' + str(i) + '.png', fakeImg[i])
+            # cv2.imwrite('V' + str(i) + '.png', realRGB[i])
+            # cv2.imwrite('T' + str(i) + '.png', realIR[i])
+
+        self.freez_person()
+        feat_poolAdapt, id_scoreAdapt, x3Adapt, person_maskAdapt = self.person_id(xRGB=None, xIR=None, xZ=xAdapt,
+                                                                                  modal=3, with_feature=with_feature)
         cam_featAdapt, cam_scoreAdapt = self.camera_id(x3Adapt, person_mask[:b])
-        # self.unFreez_person()
+        self.unFreez_person()
 
+        if with_feature and modal == 0:
+            return
 
-        return torch.cat((feat_pool, feat_poolAdapt), 0), torch.cat((id_score, id_scoreAdapt), 0),\
+        return torch.cat((feat_pool, feat_poolAdapt), 0), torch.cat((id_score, id_scoreAdapt), 0), \
                torch.cat((cam_feat, cam_featAdapt), 0), torch.cat((cam_score, cam_scoreAdapt), 0)
 
     def freez_person(self):
         self.person_id.base_resnet.train(False)
-        self.person_id.NL_1.train(False)
-        self.person_id.NL_2.train(False)
-        self.person_id.NL_3.train(False)
-        self.person_id.NL_4.train(False)
+
         self.person_id.bottleneck.train(False)
         self.person_id.classifier.train(False)
 
     def unFreez_person(self):
         self.person_id.base_resnet.train(True)
-        self.person_id.NL_1.train(True)
-        self.person_id.NL_2.train(True)
-        self.person_id.NL_3.train(True)
-        self.person_id.NL_4.train(True)
+
         self.person_id.bottleneck.train(True)
         self.person_id.classifier.train(True)
+
+    def getPoolDim(self):
+        return self.camera_id.pool_dim
+
+
 class Camera_net(nn.Module):
     def __init__(self, camera_num=6, arch='resnet50'):
 
@@ -71,7 +108,7 @@ class Camera_net(nn.Module):
         else:
             self.pool_dim = 512
 
-        #self.encoder = base_resnet(arch=arch).resnet_part2[2]  # layer4
+        # self.encoder = base_resnet(arch=arch).resnet_part2[2]  # layer4
         self.encoder = base_resnet(arch=arch).resnet_part2[2]  # layer4
 
         self.dim = 0
@@ -89,7 +126,6 @@ class Camera_net(nn.Module):
         self.camera_classifier.apply(weights_init_classifier)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
-
         # self.adaptors = nn.Parameter(torch.ones(6, 2, 3))
         # self.adaptors.register_hook(self.parameters_hook)
 
@@ -97,7 +133,7 @@ class Camera_net(nn.Module):
         cameraFeat = self.encoder(x)
 
         if (self.training):
-            cameraFeat = (1-person_mask) * cameraFeat
+            cameraFeat = (1 - person_mask) * cameraFeat
 
         camera_global = embed_net.gl_pool(cameraFeat, 'off')
         cam_feat = self.camera_bottleneck(camera_global)
@@ -106,7 +142,7 @@ class Camera_net(nn.Module):
 
 
 class embed_net(nn.Module):
-    def __init__(self,  class_num, no_local= 'on', gm_pool = 'on', arch='resnet50', camera_num=6):
+    def __init__(self, class_num, no_local='on', gm_pool='on', arch='resnet50', camera_num=6):
         super(embed_net, self).__init__()
         if arch == 'resnet50':
             self.pool_dim = 2048
@@ -120,30 +156,10 @@ class embed_net(nn.Module):
 
         self.base_resnet = base_resnet(arch=arch)
 
-
         self.dim = 0
         # self.part_num = 5
 
-
         activation = nn.Sigmoid()
-
-        self.non_local = no_local
-        if self.non_local =='on':
-            layers=[3, 4, 6, 3]
-            non_layers=[0,2,3,0]
-            self.NL_1 = nn.ModuleList(
-                [Non_local(256) for i in range(non_layers[0])])
-            self.NL_1_idx = sorted([layers[0] - (i + 1) for i in range(non_layers[0])])
-            self.NL_2 = nn.ModuleList(
-                [Non_local(512) for i in range(non_layers[1])])
-            self.NL_2_idx = sorted([layers[1] - (i + 1) for i in range(non_layers[1])])
-            self.NL_3 = nn.ModuleList(
-                [Non_local(1024) for i in range(non_layers[2])])
-            self.NL_3_idx = sorted([layers[2] - (i + 1) for i in range(non_layers[2])])
-            self.NL_4 = nn.ModuleList(
-                [Non_local(2048) for i in range(non_layers[3])])
-            self.NL_4_idx = sorted([layers[3] - (i + 1) for i in range(non_layers[3])])
-
 
 
         self.l2norm = Normalize(2)
@@ -165,18 +181,16 @@ class embed_net(nn.Module):
         # for cls in self.classifier_parts:
         #     cls.apply(weights_init_classifier)
 
-
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.gm_pool = gm_pool
 
         # self.adaptors = nn.Parameter(torch.ones(6, 2, 3))
         # self.adaptors.register_hook(self.parameters_hook)
 
-
     def parameters_hook(self, grad):
         print("grad:", grad)
 
-    def forward(self, xRGB, xIR, xZ = None, modal=0, with_feature = False, with_camID=False):
+    def forward(self, xRGB, xIR, xZ=None, modal=0, with_feature=False, with_camID=False):
         if modal == 0:
             x1 = self.visible_module(xRGB)
             x2 = self.thermal_module(xIR)
@@ -189,73 +203,31 @@ class embed_net(nn.Module):
         elif modal == 3:
             x = self.z_module(xZ)
 
-
-        # shared block
-        if self.non_local == 'on':
-            NL1_counter = 0
-            if len(self.NL_1_idx) == 0: self.NL_1_idx = [-1]
-            # for i in range(len(self.base_resnet.base.layer1)):
-            #     x = self.base_resnet.layer1[i](x)
-            #     if i == self.NL_1_idx[NL1_counter]:
-            #         _, C, H, W = x.shape
-            #         x = self.NL_1[NL1_counter](x)
-            #         NL1_counter += 1
-            # Layer 2
-            NL2_counter = 0
-            if len(self.NL_2_idx) == 0: self.NL_2_idx = [-1]
-            for i in range(len(self.base_resnet.resnet_part2[0])):
-                x = self.base_resnet.resnet_part2[0][i](x)
-                if i == self.NL_2_idx[NL2_counter]:
-                    _, C, H, W = x.shape
-                    x = self.NL_2[NL2_counter](x)
-                    NL2_counter += 1
-            # Layer 3
-            NL3_counter = 0
-            if len(self.NL_3_idx) == 0: self.NL_3_idx = [-1]
-            for i in range(len(self.base_resnet.resnet_part2[1])):
-                x = self.base_resnet.resnet_part2[1][i](x)
-                if i == self.NL_3_idx[NL3_counter]:
-                    _, C, H, W = x.shape
-                    x = self.NL_3[NL3_counter](x)
-                    NL3_counter += 1
-            x3 = x
-            # Layer 4
-
-            NL4_counter = 0
-            if len(self.NL_4_idx) == 0: self.NL_4_idx = [-1]
-            for i in range(len(self.base_resnet.resnet_part2[2])):
-                x = self.base_resnet.resnet_part2[2][i](x)
-                if i == self.NL_4_idx[NL4_counter]:
-                    _, C, H, W = x.shape
-                    x = self.NL_4[NL4_counter](x)
-                    NL4_counter += 1
-        else:
-            x = self.base_resnet.resnet_part2[0](x) # layer2
-            x = self.base_resnet.resnet_part2[1](x) # layer3
-            x3 = x
-            x = self.base_resnet.resnet_part2[2](x) # layer4
+        x = self.base_resnet.resnet_part2[0](x)  # layer2
+        x = self.base_resnet.resnet_part2[1](x)  # layer3
+        x3 = x
+        x = self.base_resnet.resnet_part2[2](x)  # layer4
 
         person_mask = self.compute_mask(x)
         feat_pool = self.gl_pool(x, self.gm_pool)
         feat = self.bottleneck(feat_pool)
 
         if with_feature:
-            return feat_pool, feat, x
+            return feat, feat_pool, x, x3, person_mask
 
-        if not self.training :
+        if not self.training:
             return self.l2norm(feat), self.l2norm(feat_pool)
         return feat_pool, self.classifier(feat), x3, person_mask
 
-
     @staticmethod
     def gl_pool(x, gm_pool):
-        if gm_pool  == 'on':
+        if gm_pool == 'on':
             b, c, h, w = x.shape
             x = x.view(b, c, -1)
             p = 3.0
-            x_pool = (torch.mean(x**p, dim=-1) + 1e-12)**(1/p)
+            x_pool = (torch.mean(x ** p, dim=-1) + 1e-12) ** (1 / p)
         else:
-            x_pool = F.adaptive_avg_pool2d(x, (1,1))
+            x_pool = F.adaptive_avg_pool2d(x, (1, 1))
             x_pool = x_pool.view(x_pool.size(0), x_pool.size(1))
 
         return x_pool
@@ -269,7 +241,7 @@ class embed_net(nn.Module):
     @staticmethod
     def compute_mask(feat):
         batch_size, fdim, h, w = feat.shape
-        norms = torch.norm(feat, p=2, dim=1).view(batch_size, h*w)
+        norms = torch.norm(feat, p=2, dim=1).view(batch_size, h * w)
 
         norms -= norms.min(dim=-1, keepdim=True)[0]
         norms /= norms.max(dim=-1, keepdim=True)[0] + 1e-12
@@ -277,11 +249,7 @@ class embed_net(nn.Module):
 
         return mask.detach()
 
-
     def count_params(self):
         ids = set(map(id, self.parameters()))
         params = filter(lambda p: id(p) in ids, self.parameters())
         return sum(p.numel() for p in params if p.requires_grad)
-
-
-
