@@ -61,11 +61,11 @@ class ModelAdaptive(nn.Module):
         xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5).detach()
         xAdapt = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
 
-        for i in range(b):
-            invTrans(xNorm[i].detach()).save('images/N' + str(i) + '.png')
-            invTrans(xAdapt[i].detach()).save('images/Z' + str(i) + '.png')
-            invTrans(xRGB[i].detach()).save('images/V' + str(i) + '.png')
-            invTrans(xIR[i].detach()).save('images/T' + str(i) + '.png')
+        # for i in range(b):
+        #     invTrans(xNorm[i].detach()).save('images/N' + str(i) + '.png')
+        #     invTrans(xAdapt[i].detach()).save('images/Z' + str(i) + '.png')
+        #     invTrans(xRGB[i].detach()).save('images/V' + str(i) + '.png')
+        #     invTrans(xIR[i].detach()).save('images/T' + str(i) + '.png')
 
             # cv2.imwrite('Z' + str(i) + '.png', fakeImg[i])
             # cv2.imwrite('V' + str(i) + '.png', realRGB[i])
