@@ -38,9 +38,9 @@ class ModelAdaptive(nn.Module):
         super(ModelAdaptive, self).__init__()
         self.person_id = embed_net(class_num, no_local, gm_pool, arch)
         self.camera_id = Camera_net(camera_num, arch)
-        self.adaptor = Decoder(n_upsample=4, n_res=2, dim=1024, output_dim=3, res_norm='adain', activ='relu',
+        self.adaptor = Decoder(n_upsample=4, n_res=2, dim=self.person_id.pool_dim // 2, output_dim=3, res_norm='adain', activ='relu',
                                pad_type='reflect')
-        self.mlp = MLP(2048, get_num_adain_params(self.adaptor), 128, 1, norm='none', activ='relu')
+        self.mlp = MLP(self.person_id.pool_dim, get_num_adain_params(self.adaptor), 128, 1, norm='none', activ='relu')
 
     def forward(self, xRGB, xIR, modal=0, with_feature=False, with_camID=False, epoch=0):
 
@@ -53,7 +53,7 @@ class ModelAdaptive(nn.Module):
         else:
             feat_pool, id_score, x3, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=False)
 
-        cam_feat, cam_score = self.camera_id(x3, person_mask)
+        cam_feat, cam_score = self.camera_id(x3.detach(), person_mask)
         adain_params = self.mlp(cam_feat[b:])
         assign_adain_params(adain_params, self.adaptor)
         alpha = (min(epoch, 30) + 1) / 31

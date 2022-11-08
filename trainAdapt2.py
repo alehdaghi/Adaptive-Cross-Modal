@@ -309,7 +309,7 @@ def trainRe_ID(epoch, feat, out0, labels, train_loss, id_loss, tri_loss, gray_lo
     # color_cam_feat, thermal_cam_feat, gray_cam_feat = torch.split(camera_feat, label1.shape[0])
 
     loss_tri, _ = hctriplet(feat, labels)
-    loss_color2gray = 30 * reconst_loss(color_feat, gray_feat.detach())
+    loss_color2gray = 30 * reconst_loss(color_feat, gray_feat.detach().clone())
     loss_id = criterion_id(out0, labels)
     loss = loss_id + loss_tri + loss_color2gray
 
@@ -319,8 +319,8 @@ def trainRe_ID(epoch, feat, out0, labels, train_loss, id_loss, tri_loss, gray_lo
     gray_loss.update(loss_color2gray.item(), labels.size(0))
 
     optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
+    loss.backward(retain_graph=True)
+    # optimizer.step()
 
     return
 
@@ -329,7 +329,7 @@ def trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss):
     color_cam_feat, thermal_cam_feat, gray_cam_feat = torch.split(camera_feat, cameras.shape[0] // 3)
 
     loss_color2gray = 30 * reconst_loss(color_feat.detach(), gray_feat)
-    loss_thermal2gray = 30 * reconst_loss(thermal_cam_feat.detach(), gray_cam_feat)
+    loss_thermal2gray = 30 * reconst_loss(thermal_cam_feat.detach().clone(), gray_cam_feat)
 
     loss_camID = criterion_id(camera_out0, cameras - 1)
 
@@ -339,7 +339,7 @@ def trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss):
 
     adaptor_optimizer.zero_grad()
     loss.backward()
-    adaptor_optimizer.step()
+    # adaptor_optimizer.step()
 
     return
 
@@ -388,6 +388,8 @@ def train(epoch):
         trainRe_ID(epoch, feat, out0, labels, train_loss, id_loss, tri_loss, gray_loss)
         trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss)
 
+        optimizer.step()
+        adaptor_optimizer.step()
 
         # part_loss.update(partsMap['loss_body_cont'].item(), 2 * input1.size(0))
         total += labels.size(0)
