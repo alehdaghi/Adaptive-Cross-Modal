@@ -61,11 +61,11 @@ class ModelAdaptive(nn.Module):
         xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5).detach()
         xAdapt = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
 
-        # for i in range(b):
-        #     invTrans(xNorm[i].detach()).save('images/N' + str(i) + '.png')
-        #     invTrans(xAdapt[i].detach()).save('images/Z' + str(i) + '.png')
-        #     invTrans(xRGB[i].detach()).save('images/V' + str(i) + '.png')
-        #     invTrans(xIR[i].detach()).save('images/T' + str(i) + '.png')
+        for i in range(b):
+            invTrans(xNorm[i].detach()).save('images/N' + str(i) + '.png')
+            invTrans(xAdapt[i].detach()).save('images/Z' + str(i) + '.png')
+            invTrans(xRGB[i].detach()).save('images/V' + str(i) + '.png')
+            invTrans(xIR[i].detach()).save('images/T' + str(i) + '.png')
 
             # cv2.imwrite('Z' + str(i) + '.png', fakeImg[i])
             # cv2.imwrite('V' + str(i) + '.png', realRGB[i])
@@ -83,17 +83,19 @@ class ModelAdaptive(nn.Module):
         return torch.cat((feat_pool, feat_poolAdapt), 0), torch.cat((id_score, id_scoreAdapt), 0), \
                torch.cat((cam_feat, cam_featAdapt), 0), torch.cat((cam_score, cam_scoreAdapt), 0)
 
-    def freez_person(self):
-        self.person_id.base_resnet.train(False)
+    def setGrad(self, module, grad):
+        for param in module.parameters():
+            param.requires_grad = grad
 
-        self.person_id.bottleneck.train(False)
-        self.person_id.classifier.train(False)
+    def freez_person(self):
+        self.setGrad(self.person_id.base_resnet, False)
+        self.setGrad(self.person_id.bottleneck, False)
+        self.setGrad(self.person_id.classifier, False)
 
     def unFreez_person(self):
-        self.person_id.base_resnet.train(True)
-
-        self.person_id.bottleneck.train(True)
-        self.person_id.classifier.train(True)
+        self.setGrad(self.person_id.base_resnet, True)
+        self.setGrad(self.person_id.bottleneck, True)
+        self.setGrad(self.person_id.classifier, True)
 
     def getPoolDim(self):
         return self.camera_id.pool_dim

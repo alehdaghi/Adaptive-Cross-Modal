@@ -228,7 +228,7 @@ if len(args.resume) > 0:
     if os.path.isfile(model_path):
         print('==> loading checkpoint {}'.format(args.resume))
         checkpoint = torch.load(model_path)
-        start_epoch = checkpoint['epoch']
+        start_epoch = checkpoint['epoch'] + 1
         net.load_state_dict(checkpoint['net'])
         print('==> loaded checkpoint {} (epoch {})'
               .format(args.resume, checkpoint['epoch']))
@@ -258,19 +258,32 @@ criterion_contrastive = SupConLoss()
 
 if args.optim == 'sgd':
     ignored_params = list(map(id, net.person_id.bottleneck.parameters())) \
-                     + list(map(id, net.person_id.classifier.parameters()))
+                    + list(map(id, net.person_id.classifier.parameters())) \
+                    + list(map(id, net.person_id.z_module.parameters()))
+
     ids = set(map(id, net.person_id.parameters()))
     params = filter(lambda p: id(p) in ids, net.person_id.parameters())
     base_params = filter(lambda p: id(p) not in ignored_params, params)
+
+    gen_params = list(net.adaptor.parameters()) + list(net.mlp.parameters()) \
+                 + list(net.person_id.z_module.parameters()) + list(net.camera_id.parameters())
 
     optimizer = optim.SGD([
         {'params': base_params, 'lr': 0.1 * args.lr},
         {'params': net.camera_id.parameters(), 'lr': 0.1 * args.lr},
         {'params': net.person_id.bottleneck.parameters(), 'lr': args.lr},
-        {'params': net.person_id.classifier.parameters(), 'lr': args.lr}],
+        {'params': net.person_id.classifier.parameters(), 'lr': args.lr},
+        # {'params': gen_params, 'lr': args.lr}
+        ],
         weight_decay=5e-4, momentum=0.9, nesterov=True)
 
-    gen_params = list(net.adaptor.parameters()) + list(net.mlp.parameters())
+    # adaptor_optimizer = optim.SGD([
+    #     {'params': net.camera_id.parameters(), 'lr': 0.1 * args.lr},
+    #     {'params': gen_params, 'lr': args.lr},
+    #     # {'params': gen_params, 'lr': args.lr}
+    # ],
+    #     weight_decay=5e-4, momentum=0.9, nesterov=True)
+
     adaptor_optimizer = optim.Adam(gen_params, lr=0.0001, betas=(0.5, 0.999), weight_decay=0.0001)
 
 # exp_lr_scheduler = lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
@@ -291,6 +304,44 @@ def adjust_learning_rate(optimizer, epoch):
 
     return lr
 
+def trainRe_ID(epoch, feat, out0, labels, train_loss, id_loss, tri_loss, gray_loss):
+    color_feat, thermal_feat, gray_feat = torch.split(feat, labels.shape[0] // 3)
+    # color_cam_feat, thermal_cam_feat, gray_cam_feat = torch.split(camera_feat, label1.shape[0])
+
+    loss_tri, _ = hctriplet(feat, labels)
+    loss_color2gray = 30 * reconst_loss(color_feat, gray_feat.detach())
+    loss_id = criterion_id(out0, labels)
+    loss = loss_id + loss_tri + loss_color2gray
+
+    train_loss.update(loss.item(), labels.size(0))
+    id_loss.update(loss_id.item(), labels.size(0))
+    tri_loss.update(loss_tri.item(), labels.size(0))
+    gray_loss.update(loss_color2gray.item(), labels.size(0))
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    return
+
+def trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss):
+    color_feat, thermal_feat, gray_feat = torch.split(feat, cameras.shape[0] // 3)
+    color_cam_feat, thermal_cam_feat, gray_cam_feat = torch.split(camera_feat, cameras.shape[0] // 3)
+
+    loss_color2gray = 30 * reconst_loss(color_feat.detach(), gray_feat)
+    loss_thermal2gray = 30 * reconst_loss(thermal_cam_feat.detach(), gray_cam_feat)
+
+    loss_camID = criterion_id(camera_out0, cameras - 1)
+
+    loss = loss_camID + loss_color2gray + loss_thermal2gray
+
+    camera_loss.update(loss.item(), cameras.size(0))
+
+    adaptor_optimizer.zero_grad()
+    loss.backward()
+    adaptor_optimizer.step()
+
+    return
 
 def train(epoch):
 
@@ -329,42 +380,15 @@ def train(epoch):
 
         feat, out0, camera_feat, camera_out0 = net(input1, input2, modal=args.uni, epoch=epoch)
 
-
-        color_feat, thermal_feat, gray_feat = torch.split(feat, label1.shape[0])
-        color_cam_feat, thermal_cam_feat, gray_cam_feat = torch.split(camera_feat, label1.shape[0])
-
-        loss_tri, _ = hctriplet (feat, labels)
-        loss_color2gray = 30 * reconst_loss(color_feat, gray_feat)
-        loss_thermal2gray = 30 * reconst_loss(thermal_cam_feat, gray_cam_feat)
-
-        loss_id = criterion_id(out0, labels)
-
-        #loss_tri, batch_acc = criterion_tri(feat, labels)
-        #loss_center = hetro_loss(color_feat, thermal_feat, color_label, thermal_label)
-        #l1, _ = hctriplet(feat, labels)
-
-
         #correct += (batch_acc / 2)
         _, predicted = out0.max(1)
         correct += (predicted.eq(labels).sum().item() / 2)
 
-        loss = loss_id + loss_tri + loss_color2gray #+ loss_center
 
-        loss_camID = criterion_id(camera_out0, cameras-1)
+        trainRe_ID(epoch, feat, out0, labels, train_loss, id_loss, tri_loss, gray_loss)
+        trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss)
 
-        loss = loss + (loss_camID + loss_thermal2gray) * 0.5
-        optimizer.zero_grad()
-        adaptor_optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        adaptor_optimizer.step()
 
-        # update P
-        train_loss.update(loss.item(), 2 * input1.size(0))
-        id_loss.update(loss_id.item(), 2 * input1.size(0))
-        tri_loss.update(loss_tri.item(), 2 * input1.size(0))
-        gray_loss.update(loss_color2gray.item(), 2 * input1.size(0))
-        camera_loss.update(loss_camID.item() + loss_thermal2gray.item(), 2 * input1.size(0))
         # part_loss.update(partsMap['loss_body_cont'].item(), 2 * input1.size(0))
         total += labels.size(0)
 
