@@ -40,7 +40,7 @@ class ModelAdaptive(nn.Module):
         self.camera_id = Camera_net(camera_num, arch)
         self.adaptor = Decoder(n_upsample=4, n_res=2, dim=self.person_id.pool_dim, output_dim=3, res_norm='adain', activ='relu',
                                pad_type='reflect')
-        self.mlp = MLP(self.person_id.pool_dim, get_num_adain_params(self.adaptor), 128, 1, norm='none', activ='relu')
+        self.mlp = MLP(self.camera_id.pool_dim, get_num_adain_params(self.adaptor), 128, 1, norm='none', activ='relu')
 
     def forward(self, xRGB, xIR, modal=0, with_feature=False, with_camID=False, epoch=0):
 
