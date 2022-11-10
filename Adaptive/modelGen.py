@@ -53,13 +53,16 @@ class ModelAdaptive(nn.Module):
         else:
             feat_pool, id_score, x3, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=False)
 
-        cam_feat, cam_score = self.camera_id(x3.detach(), person_mask)
-        adain_params = self.mlp(cam_feat[b:])
-        assign_adain_params(adain_params, self.adaptor)
-        alpha = (min(epoch, 30) + 1) / 31
-        xAdapt = (alpha) * self.adaptor(x3[:b]) + (1-alpha) * torch.rand(b, 3, 1, 1).cuda()
-        xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5).detach()
-        xAdapt = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
+        cam_feat, cam_score = self.camera_id(torch.cat((xRGB, xIR), dim=0), person_mask)
+
+
+
+        # adain_params = self.mlp(cam_feat[b:])
+        # assign_adain_params(adain_params, self.adaptor)
+        # alpha = (min(epoch, 30) + 1) / 31
+        # xAdapt = (alpha) * self.adaptor(x3[:b]) + (1-alpha) * torch.rand(b, 3, 1, 1).cuda()
+        # xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5).detach()
+        # xAdapt = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
 
         # for i in range(b):
         #     invTrans(xNorm[i].detach()).save('images/N' + str(i) + '.png')
@@ -71,17 +74,18 @@ class ModelAdaptive(nn.Module):
             # cv2.imwrite('V' + str(i) + '.png', realRGB[i])
             # cv2.imwrite('T' + str(i) + '.png', realIR[i])
 
-        self.freeze_person()
-        feat_poolAdapt, id_scoreAdapt, x3Adapt, person_maskAdapt = self.person_id(xRGB=None, xIR=None, xZ=xAdapt,
-                                                                                  modal=3, with_feature=with_feature)
-        cam_featAdapt, cam_scoreAdapt = self.camera_id(x3Adapt, person_mask[:b])
-        self.unFreeze_person()
+        # self.freeze_person()
+        # feat_poolAdapt, id_scoreAdapt, x3Adapt, person_maskAdapt = self.person_id(xRGB=None, xIR=None, xZ=xAdapt,
+        #                                                                           modal=3, with_feature=with_feature)
+        # cam_featAdapt, cam_scoreAdapt = self.camera_id(x3Adapt, person_mask[:b])
+        # self.unFreeze_person()
 
         if with_feature and modal == 0:
             return
 
-        return torch.cat((feat_pool, feat_poolAdapt), 0), torch.cat((id_score, id_scoreAdapt), 0), \
-               torch.cat((cam_feat, cam_featAdapt), 0), torch.cat((cam_score, cam_scoreAdapt), 0)
+        return feat_pool, id_score, cam_feat, cam_score
+        # return torch.cat((feat_pool, feat_poolAdapt), 0), torch.cat((id_score, id_scoreAdapt), 0), \
+        #        torch.cat((cam_feat, cam_featAdapt), 0), torch.cat((cam_score, cam_scoreAdapt), 0)
 
     def setGrad(self, module, grad):
         for param in module.parameters():
@@ -110,8 +114,10 @@ class Camera_net(nn.Module):
         else:
             self.pool_dim = 512
 
+        self.pool_dim = 512
         # self.encoder = base_resnet(arch=arch).resnet_part2[2]  # layer4
-        self.encoder = base_resnet(arch=arch).resnet_part2[2]  # layer4
+        self.encoder = torch.nn.Sequential(ShallowModule('resnet18'), base_resnet('resnet18'))
+
 
         self.dim = 0
         # self.part_num = 5
