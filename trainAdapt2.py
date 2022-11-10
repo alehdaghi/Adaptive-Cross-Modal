@@ -392,6 +392,7 @@ def train(epoch):
         bs = label1.shape[0]
         input1 = Variable(input1.cuda())
         input2 = Variable(input2.cuda())
+        cam2 = Variable(cam2.cuda())
         input3 = None
         # labels = torch.cat((label1, label2, label1), 0)
         # cameras = torch.cat((cam1, cam2, cam2), 0).cuda()
@@ -422,7 +423,7 @@ def train(epoch):
             xZ = net.generate(epoch, xRGB=input1, content=featRGBX4, style=camera_Ir)
             feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
             trainGen_ID(epoch, featRGB, feat_Z, camera_Ir, camera_feat_Z, camera_out0_Z,
-                        cam2.cuda(), gray_loss)
+                        cam2, gray_loss)
             _, predicted = camera_out0_Z.max(1)
             correct += (predicted.eq(cam2-1).sum().item() / 2)
         else:
