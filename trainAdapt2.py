@@ -378,7 +378,7 @@ def train(epoch):
         labels = Variable(labels.cuda())
         data_time.update(time.time() - end)
 
-        feat, out0, camera_feat, camera_out0 = net(input1, input2, modal=args.uni, epoch=epoch)
+        feat , out0, camera_feat, camera_out0 = net(input1, input2, modal=args.uni, epoch=epoch)
 
         #correct += (batch_acc / 2)
         _, predicted = out0.max(1)

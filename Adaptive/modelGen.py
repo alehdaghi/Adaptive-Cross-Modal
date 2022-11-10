@@ -61,21 +61,21 @@ class ModelAdaptive(nn.Module):
         xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5).detach()
         xAdapt = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
 
-        for i in range(b):
-            invTrans(xNorm[i].detach()).save('images/N' + str(i) + '.png')
-            invTrans(xAdapt[i].detach()).save('images/Z' + str(i) + '.png')
-            invTrans(xRGB[i].detach()).save('images/V' + str(i) + '.png')
-            invTrans(xIR[i].detach()).save('images/T' + str(i) + '.png')
+        # for i in range(b):
+        #     invTrans(xNorm[i].detach()).save('images/N' + str(i) + '.png')
+        #     invTrans(xAdapt[i].detach()).save('images/Z' + str(i) + '.png')
+        #     invTrans(xRGB[i].detach()).save('images/V' + str(i) + '.png')
+        #     invTrans(xIR[i].detach()).save('images/T' + str(i) + '.png')
 
             # cv2.imwrite('Z' + str(i) + '.png', fakeImg[i])
             # cv2.imwrite('V' + str(i) + '.png', realRGB[i])
             # cv2.imwrite('T' + str(i) + '.png', realIR[i])
 
-        self.freez_person()
+        self.freeze_person()
         feat_poolAdapt, id_scoreAdapt, x3Adapt, person_maskAdapt = self.person_id(xRGB=None, xIR=None, xZ=xAdapt,
                                                                                   modal=3, with_feature=with_feature)
         cam_featAdapt, cam_scoreAdapt = self.camera_id(x3Adapt, person_mask[:b])
-        self.unFreez_person()
+        self.unFreeze_person()
 
         if with_feature and modal == 0:
             return
@@ -87,12 +87,12 @@ class ModelAdaptive(nn.Module):
         for param in module.parameters():
             param.requires_grad = grad
 
-    def freez_person(self):
+    def freeze_person(self):
         self.setGrad(self.person_id.base_resnet, False)
         self.setGrad(self.person_id.bottleneck, False)
         self.setGrad(self.person_id.classifier, False)
 
-    def unFreez_person(self):
+    def unFreeze_person(self):
         self.setGrad(self.person_id.base_resnet, True)
         self.setGrad(self.person_id.bottleneck, True)
         self.setGrad(self.person_id.classifier, True)
