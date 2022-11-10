@@ -38,22 +38,27 @@ class ModelAdaptive(nn.Module):
         super(ModelAdaptive, self).__init__()
         self.person_id = embed_net(class_num, no_local, gm_pool, arch)
         self.camera_id = Camera_net(camera_num, arch)
-        self.adaptor = Decoder(n_upsample=4, n_res=2, dim=self.person_id.pool_dim // 2, output_dim=3, res_norm='adain', activ='relu',
+        self.adaptor = Decoder(n_upsample=4, n_res=2, dim=self.person_id.pool_dim, output_dim=3, res_norm='adain', activ='relu',
                                pad_type='reflect')
         self.mlp = MLP(self.person_id.pool_dim, get_num_adain_params(self.adaptor), 128, 1, norm='none', activ='relu')
 
     def forward(self, xRGB, xIR, modal=0, with_feature=False, with_camID=False, epoch=0):
 
-        b = xRGB.shape[0]
+        b = xIR.shape[0]
         if not self.training and with_feature == False:
             return self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=with_feature)
         if with_feature:
-            feat_pool, feat, x, x3, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=modal,
+            feat_pool, id_score, x4, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=modal,
                                                                  with_feature=True)
         else:
-            feat_pool, id_score, x3, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=False)
+            feat_pool, id_score, x4, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=False)
 
-        cam_feat, cam_score = self.camera_id(torch.cat((xRGB, xIR), dim=0), person_mask)
+        if modal == 0:
+            x = torch.cat((xRGB, xIR), dim=0)
+        else:
+            x = xIR
+
+        cam_feat, cam_score = self.camera_id(x, person_mask)
 
 
 
@@ -80,26 +85,40 @@ class ModelAdaptive(nn.Module):
         # cam_featAdapt, cam_scoreAdapt = self.camera_id(x3Adapt, person_mask[:b])
         # self.unFreeze_person()
 
-        if with_feature and modal == 0:
-            return
+        if with_feature :
+            return feat_pool, id_score, cam_feat, cam_score, x4
 
         return feat_pool, id_score, cam_feat, cam_score
         # return torch.cat((feat_pool, feat_poolAdapt), 0), torch.cat((id_score, id_scoreAdapt), 0), \
         #        torch.cat((cam_feat, cam_featAdapt), 0), torch.cat((cam_score, cam_scoreAdapt), 0)
 
+    def generate(self, epoch, xRGB, featMat, cam_feat):
+
+        b = xRGB.shape[0]
+        adain_params = self.mlp(cam_feat[b:])
+        assign_adain_params(adain_params, self.adaptor)
+        alpha = 1 #(min(epoch, 30) + 1) / 31
+        xAdapt = (alpha) * self.adaptor(featMat[:b]) #+ (1-alpha) * torch.rand(b, 3, 1, 1).cuda()
+        xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5).detach()
+        xAdapt = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
+        return xAdapt
+
     def setGrad(self, module, grad):
         for param in module.parameters():
             param.requires_grad = grad
 
+
     def freeze_person(self):
-        self.setGrad(self.person_id.base_resnet, False)
-        self.setGrad(self.person_id.bottleneck, False)
-        self.setGrad(self.person_id.classifier, False)
+        self.setGrad(self.person_id, False)
+        self.setGrad(self.camera_id, False)
+        # self.setGrad(self.person_id.bottleneck, False)
+        # self.setGrad(self.person_id.classifier, False)
 
     def unFreeze_person(self):
-        self.setGrad(self.person_id.base_resnet, True)
-        self.setGrad(self.person_id.bottleneck, True)
-        self.setGrad(self.person_id.classifier, True)
+        self.setGrad(self.person_id, True)
+        self.setGrad(self.camera_id, True)
+        # self.setGrad(self.person_id.bottleneck, True)
+        # self.setGrad(self.person_id.classifier, True)
 
     def getPoolDim(self):
         return self.camera_id.pool_dim
@@ -221,11 +240,11 @@ class embed_net(nn.Module):
         feat = self.bottleneck(feat_pool)
 
         if with_feature:
-            return feat, feat_pool, x, x3, person_mask
+            return feat_pool, self.classifier(feat), x, person_mask
 
         if not self.training:
             return self.l2norm(feat), self.l2norm(feat_pool)
-        return feat_pool, self.classifier(feat), x3, person_mask
+        return feat_pool, self.classifier(feat), x, person_mask
 
     @staticmethod
     def gl_pool(x, gm_pool):

@@ -266,7 +266,7 @@ if args.optim == 'sgd':
     base_params = filter(lambda p: id(p) not in ignored_params, params)
 
     gen_params = list(net.adaptor.parameters()) + list(net.mlp.parameters()) \
-                 + list(net.person_id.z_module.parameters()) + list(net.camera_id.parameters())
+                 #+ list(net.person_id.z_module.parameters()) + list(net.camera_id.parameters())
 
     optimizer = optim.SGD([
         {'params': base_params, 'lr': 0.1 * args.lr},
@@ -344,6 +344,24 @@ def trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss):
 
     return
 
+def trainGen_ID(epoch, feat, feat_Z, camera_feat, camera_feat_Z,
+                camera_out0, camera_out0_Z, cameras, cameras_Z, gray_loss):
+
+    color_feat, thermal_feat = torch.split(feat, cameras.shape[0] // 2)
+    color_cam_feat, thermal_cam_feat= torch.split(camera_feat, cameras.shape[0] // 2)
+
+    loss_camID = criterion_id(camera_out0_Z, cameras_Z - 1)
+    loss_color2gray = 30 * reconst_loss(color_feat.detach(), feat_Z)
+    loss_thermal2gray = 30 * reconst_loss(thermal_cam_feat.detach(), camera_feat_Z)
+
+    loss = loss_camID + loss_color2gray + loss_thermal2gray
+    gray_loss.update(loss.item(), cameras.size(0))
+
+    adaptor_optimizer.zero_grad()
+    loss.backward()
+    # adaptor_optimizer.step()
+
+
 def train(epoch):
 
     current_lr = adjust_learning_rate(optimizer, epoch)
@@ -362,6 +380,10 @@ def train(epoch):
     net.train()
     end = time.time()
 
+    is_train_generator = True
+    if is_train_generator:
+        net.freeze_person()
+
     for batch_idx, (input1, input2, input3, label1, label2, _, cam1, cam2) in enumerate(trainloader):
 
         bs = label1.shape[0]
@@ -369,7 +391,7 @@ def train(epoch):
         input2 = Variable(input2.cuda())
         input3 = None
         # labels = torch.cat((label1, label2, label1), 0)
-        cameras = torch.cat((cam1, cam2, cam2), 0).cuda()
+        # cameras = torch.cat((cam1, cam2, cam2), 0).cuda()
 
         labels = torch.cat((label1, label2), 0)
         cameras = torch.cat((cam1, cam2), 0).cuda()
@@ -382,17 +404,26 @@ def train(epoch):
         labels = Variable(labels.cuda())
         data_time.update(time.time() - end)
 
-        feat , out0, camera_feat, camera_out0 = net(input1, input2, modal=args.uni, epoch=epoch)
+        if is_train_generator:
+            with torch.no_grad():
+                feat , out0, camera_feat, camera_out0, x4 = net(input1, input2, modal=args.uni, epoch=epoch, with_feature=True)
+        else:
+            feat, out0, camera_feat, camera_out0 = net(input1, input2, modal=args.uni, epoch=epoch)
 
         #correct += (batch_acc / 2)
         _, predicted = out0.max(1)
         correct += (predicted.eq(labels).sum().item() / 2)
 
+        if is_train_generator:
+            xZ = net.generate(epoch, xRGB=input1, featMat=x4, cam_feat=camera_feat)
+            feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
 
-        trainRe_ID(epoch, feat, out0, labels, train_loss, id_loss, tri_loss, gray_loss)
-        trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss)
+        # trainRe_ID(epoch, feat, out0, labels, train_loss, id_loss, tri_loss, gray_loss)
+        # trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss)
+        trainGen_ID(epoch, feat, feat_Z, camera_feat, camera_feat_Z, camera_out0, camera_out0_Z,
+                    cameras, cam2.cuda(), gray_loss)
 
-        optimizer.step()
+        # optimizer.step()
         adaptor_optimizer.step()
 
         # part_loss.update(partsMap['loss_body_cont'].item(), 2 * input1.size(0))
