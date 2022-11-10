@@ -228,7 +228,7 @@ if len(args.resume) > 0:
     if os.path.isfile(model_path):
         print('==> loading checkpoint {}'.format(args.resume))
         checkpoint = torch.load(model_path)
-        start_epoch = checkpoint['epoch'] + 1
+        start_epoch = 0 #checkpoint['epoch'] + 1
         try:
             net.load_state_dict(checkpoint['net'], strict=False)
         except:
