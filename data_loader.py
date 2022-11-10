@@ -5,7 +5,7 @@ import torch.utils.data as data
 
 
 class SYSUData(data.Dataset):
-    def __init__(self, data_dir,  transform=None, colorIndex = None, thermalIndex = None, gray=False):
+    def __init__(self, data_dir,  transform=None, colorIndex = None, thermalIndex = None, gray=False, index=False):
         
         data_dir = '../Datasets/SYSU-MM01/'
         # Load training images (path) and labels
@@ -23,6 +23,7 @@ class SYSUData(data.Dataset):
         self.cIndex = colorIndex
         self.tIndex = thermalIndex
         self.returnsGray = gray
+        self.returnIndex = index
 
     def __getitem__(self, index):
 
@@ -51,8 +52,10 @@ class SYSUData(data.Dataset):
         # if target2 != -1:
         img2 = self.transform(img2)
 
-        #if self.returnsGray:
-        return img1, img2, img3, target1, target2, target3, cam1, cam2
+        if self.returnIndex:
+            return img1, img2, img3, target1, target2, target3, cam1, cam2, c_index, t_index
+        else:
+            return img1, img2, img3, target1, target2, target3, cam1, cam2
         #else:
         #    return img1, img2, img3, target1, target2, None#cam1-1, cam2-1
 

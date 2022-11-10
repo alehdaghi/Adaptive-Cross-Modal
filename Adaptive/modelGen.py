@@ -42,14 +42,18 @@ class ModelAdaptive(nn.Module):
                                pad_type='reflect')
         self.mlp = MLP(self.camera_id.pool_dim, get_num_adain_params(self.adaptor), 128, 1, norm='none', activ='relu')
 
-    def forward(self, xRGB, xIR, modal=0, with_feature=False, with_camID=False, epoch=0):
+    def forward(self, xRGB, xIR, modal=0, with_feature=False, with_camID=False, epoch=0, ):
 
         b = xIR.shape[0]
         if not self.training and with_feature == False:
             return self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=with_feature)
+
         if with_feature:
-            feat_pool, id_score, x4, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=modal,
+            feat_pool, id_score, x4, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=1,
                                                                  with_feature=True)
+            cam_feat, cam_score = self.camera_id(xIR, person_mask)
+            return feat_pool, id_score, cam_feat, cam_score, x4
+
         else:
             feat_pool, id_score, x4, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=False)
 
@@ -92,13 +96,13 @@ class ModelAdaptive(nn.Module):
         # return torch.cat((feat_pool, feat_poolAdapt), 0), torch.cat((id_score, id_scoreAdapt), 0), \
         #        torch.cat((cam_feat, cam_featAdapt), 0), torch.cat((cam_score, cam_scoreAdapt), 0)
 
-    def generate(self, epoch, xRGB, featMat, cam_feat):
+    def generate(self, epoch, xRGB, content, style):
 
         b = xRGB.shape[0]
-        adain_params = self.mlp(cam_feat[b:])
+        adain_params = self.mlp(style)
         assign_adain_params(adain_params, self.adaptor)
         alpha = 1 #(min(epoch, 30) + 1) / 31
-        xAdapt = (alpha) * self.adaptor(featMat[:b]) #+ (1-alpha) * torch.rand(b, 3, 1, 1).cuda()
+        xAdapt = (alpha) * self.adaptor(content) #+ (1-alpha) * torch.rand(b, 3, 1, 1).cuda()
         xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5).detach()
         xAdapt = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
         return xAdapt

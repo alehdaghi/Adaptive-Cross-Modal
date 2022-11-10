@@ -164,7 +164,7 @@ transform_test = transforms.Compose([
 end = time.time()
 if dataset == 'sysu':
     # training set
-    trainset = SYSUData(data_path, transform=transform_train, gray=(args.use_gray or args.uni == 3))
+    trainset = SYSUData(data_path, transform=transform_train, gray=(args.use_gray or args.uni == 3), index=True)
     # generate the idx of each person identity
     color_pos, thermal_pos = GenIdx(trainset.train_color_label, trainset.train_ir_label)
 
@@ -229,7 +229,10 @@ if len(args.resume) > 0:
         print('==> loading checkpoint {}'.format(args.resume))
         checkpoint = torch.load(model_path)
         start_epoch = checkpoint['epoch'] + 1
-        net.load_state_dict(checkpoint['net'])
+        try:
+            net.load_state_dict(checkpoint['net'], strict=False)
+        except:
+            pass
         print('==> loaded checkpoint {} (epoch {})'
               .format(args.resume, checkpoint['epoch']))
     else:
@@ -344,18 +347,18 @@ def trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss):
 
     return
 
-def trainGen_ID(epoch, feat, feat_Z, camera_feat, camera_feat_Z,
-                camera_out0, camera_out0_Z, cameras, cameras_Z, gray_loss):
+def trainGen_ID(epoch, featRGB, feat_Z, camera_Ir, camera_feat_Z,
+                camera_out0_Z, cameras_Z, gray_loss):
 
-    color_feat, thermal_feat = torch.split(feat, cameras.shape[0] // 2)
-    color_cam_feat, thermal_cam_feat= torch.split(camera_feat, cameras.shape[0] // 2)
+    # color_feat, thermal_feat = torch.split(feat, cameras.shape[0] // 2)
+    # color_cam_feat, thermal_cam_feat= torch.split(camera_feat, cameras.shape[0] // 2)
 
     loss_camID = criterion_id(camera_out0_Z, cameras_Z - 1)
-    loss_color2gray = 30 * reconst_loss(color_feat.detach(), feat_Z)
-    loss_thermal2gray = 30 * reconst_loss(thermal_cam_feat.detach(), camera_feat_Z)
+    loss_color2gray = 30 * reconst_loss(featRGB.detach(), feat_Z)
+    loss_thermal2gray = 30 * reconst_loss(camera_Ir.detach(), camera_feat_Z)
 
     loss = loss_camID + loss_color2gray + loss_thermal2gray
-    gray_loss.update(loss.item(), cameras.size(0))
+    gray_loss.update(loss.item(), cameras_Z.size(0))
 
     adaptor_optimizer.zero_grad()
     loss.backward()
@@ -384,7 +387,7 @@ def train(epoch):
     if is_train_generator:
         net.freeze_person()
 
-    for batch_idx, (input1, input2, input3, label1, label2, _, cam1, cam2) in enumerate(trainloader):
+    for batch_idx, (input1, input2, input3, label1, label2, _, cam1, cam2, c_index, t_index) in enumerate(trainloader):
 
         bs = label1.shape[0]
         input1 = Variable(input1.cuda())
@@ -406,22 +409,29 @@ def train(epoch):
 
         if is_train_generator:
             with torch.no_grad():
-                feat , out0, camera_feat, camera_out0, x4 = net(input1, input2, modal=args.uni, epoch=epoch, with_feature=True)
+                featRGB , out0, camera_Ir, camera_out0, featRGBX4 = net(input1, input2, modal=args.uni, epoch=epoch, with_feature=True)
+                # featRGBX4, featIrX4 = torch.split(x4, bs)
+                # camera_RGB, camera_Ir = torch.split(camera_feat, bs)
         else:
             feat, out0, camera_feat, camera_out0 = net(input1, input2, modal=args.uni, epoch=epoch)
 
         #correct += (batch_acc / 2)
-        _, predicted = out0.max(1)
-        correct += (predicted.eq(labels).sum().item() / 2)
+
 
         if is_train_generator:
-            xZ = net.generate(epoch, xRGB=input1, featMat=x4, cam_feat=camera_feat)
+            xZ = net.generate(epoch, xRGB=input1, content=featRGBX4, style=camera_Ir)
             feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
+            trainGen_ID(epoch, featRGB, feat_Z, camera_Ir, camera_feat_Z, camera_out0_Z,
+                        cam2.cuda(), gray_loss)
+            _, predicted = camera_out0_Z.max(1)
+            correct += (predicted.eq(cam2-1).sum().item() / 2)
+        else:
+            _, predicted = out0.max(1)
+            correct += (predicted.eq(labels).sum().item() / 2)
 
         # trainRe_ID(epoch, feat, out0, labels, train_loss, id_loss, tri_loss, gray_loss)
         # trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss)
-        trainGen_ID(epoch, feat, feat_Z, camera_feat, camera_feat_Z, camera_out0, camera_out0_Z,
-                    cameras, cam2.cuda(), gray_loss)
+
 
         # optimizer.step()
         adaptor_optimizer.step()
