@@ -392,13 +392,14 @@ def train(epoch):
         bs = label1.shape[0]
         input1 = Variable(input1.cuda())
         input2 = Variable(input2.cuda())
+        cam1 = Variable(cam1.cuda())
         cam2 = Variable(cam2.cuda())
         input3 = None
         # labels = torch.cat((label1, label2, label1), 0)
         # cameras = torch.cat((cam1, cam2, cam2), 0).cuda()
 
         labels = torch.cat((label1, label2), 0)
-        cameras = torch.cat((cam1, cam2), 0).cuda()
+        cameras = torch.cat((cam1, cam2), 0)
 
         if args.uni == 1 or args.uni == 3:
             labels = label1
