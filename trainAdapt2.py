@@ -2,6 +2,8 @@ from __future__ import print_function
 import argparse
 import sys
 import time
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -364,6 +366,29 @@ def trainGen_ID(epoch, featRGB, feat_Z, camera_Ir, camera_feat_Z,
     loss.backward()
     # adaptor_optimizer.step()
 
+featRGB_all = torch.empty(trainset.train_color_label.size, net.person_id.pool_dim)
+camera_Ir_all = torch.empty(trainset.train_ir_label.size, net.camera_id.pool_dim)
+featRGBX4_all = torch.empty(trainset.train_color_label.size, net.person_id.pool_dim, 18 , 9)
+
+def loadAllFeat():
+    net.eval()
+    availabeIDS = np.unique(trainset.train_color_label)
+
+    with torch.no_grad():
+        for id in availabeIDS:
+            # f_c = torch.empty(len(color_pos[id]), model.pool_dim)
+            # t_c = torch.empty(len(thermal_pos[id]), model.pool_dim)
+            input_c = torch.stack([transform_test(trainset.train_color_image[i]) for i in color_pos[id]])
+            input_t = torch.stack([transform_test(trainset.train_ir_image[i]) for i in thermal_pos[id]])
+            feat_c, _, feat_c_X4, _ = net.person_id(xRGB=input_c.cuda(), xIR=None, modal=1, with_feature=True)
+            cam_feat_t, _  = net.camera_id(input_t.cuda(), None)
+            featRGB_all[color_pos[id]] = feat_c.cpu()
+            featRGBX4_all[color_pos[id]] = feat_c_X4.cpu()
+            camera_Ir_all[thermal_pos[id]] = cam_feat_t.cpu()
+            # dis[id] = torch.linalg.norm(feat_c.mean(dim=0) - feat_t.mean(dim=0)).item()
+
+            print("{} from {}".format(id, len(availabeIDS)))
+
 
 def train(epoch):
 
@@ -386,6 +411,8 @@ def train(epoch):
     is_train_generator = True
     if is_train_generator:
         net.freeze_person()
+
+
 
     for batch_idx, (input1, input2, input3, label1, label2, _, cam1, cam2, c_index, t_index) in enumerate(trainloader):
 
@@ -410,8 +437,12 @@ def train(epoch):
         data_time.update(time.time() - end)
 
         if is_train_generator:
-            with torch.no_grad():
-                featRGB , out0, camera_Ir, camera_out0, featRGBX4 = net(input1, input2, modal=args.uni, epoch=epoch, with_feature=True)
+            featRGB = featRGB_all[c_index].cuda()
+            camera_Ir = camera_Ir_all[t_index].cuda()
+            featRGBX4 = featRGBX4_all[c_index].cuda()
+
+            # with torch.no_grad():
+            #     featRGB , _, camera_Ir, _, featRGBX4 = net(input1, input2, modal=args.uni, epoch=epoch, with_feature=True)
                 # featRGBX4, featIrX4 = torch.split(x4, bs)
                 # camera_RGB, camera_Ir = torch.split(camera_feat, bs)
         else:
@@ -534,6 +565,7 @@ def test(epoch):
 
 # training
 print('==> Start Training...')
+loadAllFeat()
 for epoch in range(start_epoch, 121):
 
     print('==> Preparing Data Loader...')

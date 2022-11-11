@@ -44,7 +44,7 @@ class ModelAdaptive(nn.Module):
 
     def forward(self, xRGB, xIR, modal=0, with_feature=False, with_camID=False, epoch=0, ):
 
-        b = xIR.shape[0]
+        # b = xIR.shape[0]
         if not self.training and with_feature == False:
             return self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=with_feature)
 
@@ -163,8 +163,8 @@ class Camera_net(nn.Module):
     def forward(self, x, person_mask):
         cameraFeat = self.encoder(x)
 
-        if (self.training):
-            cameraFeat = (1 - person_mask) * cameraFeat
+        # if (self.training):
+        #     cameraFeat = (1 - person_mask) * cameraFeat
 
         camera_global = embed_net.gl_pool(cameraFeat, 'off')
         cam_feat = self.camera_bottleneck(camera_global)
