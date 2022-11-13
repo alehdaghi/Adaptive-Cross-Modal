@@ -365,12 +365,15 @@ def trainGen_ID(epoch, featRGB, feat_Z, camera_Ir, camera_feat_Z,
     adaptor_optimizer.zero_grad()
     loss.backward()
     # adaptor_optimizer.step()
-
-featRGB_all = torch.empty(trainset.train_color_label.size, net.person_id.pool_dim)
-camera_Ir_all = torch.empty(trainset.train_ir_label.size, net.camera_id.pool_dim)
-featRGBX4_all = torch.empty(trainset.train_color_label.size, net.person_id.pool_dim, 18 , 9)
+is_train_generator = True
+if is_train_generator:
+    featRGB_all = torch.empty(trainset.train_color_label.size, net.person_id.pool_dim)
+    camera_Ir_all = torch.empty(trainset.train_ir_label.size, net.camera_id.pool_dim)
+    featRGBX4_all = torch.empty(trainset.train_color_label.size, net.person_id.pool_dim, 18 , 9)
 
 def loadAllFeat():
+    if is_train_generator:
+        return
     net.eval()
     availabeIDS = np.unique(trainset.train_color_label)
 
@@ -408,7 +411,7 @@ def train(epoch):
     net.train()
     end = time.time()
 
-    is_train_generator = True
+
     if is_train_generator:
         net.freeze_person()
 
@@ -461,12 +464,12 @@ def train(epoch):
         else:
             _, predicted = out0.max(1)
             correct += (predicted.eq(labels).sum().item() / 2)
+            trainRe_ID(epoch, feat, out0, labels, train_loss, id_loss, tri_loss, gray_loss)
+            trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss)
+            optimizer.step()
 
-        # trainRe_ID(epoch, feat, out0, labels, train_loss, id_loss, tri_loss, gray_loss)
-        # trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss)
 
 
-        # optimizer.step()
         adaptor_optimizer.step()
 
         # part_loss.update(partsMap['loss_body_cont'].item(), 2 * input1.size(0))

@@ -69,23 +69,80 @@ class Generator(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, n_upsample, n_res, dim, output_dim, res_norm, activ, pad_type):
+    def __init__(self, output_dim=3):
         super(Decoder, self).__init__()
 
-        self.model = []
-        # AdaIN residual blocks
-        self.model += [ResBlocks(n_res, dim, res_norm, activ, pad_type=pad_type)]
-        # upsampling blocks
-        for i in range(n_upsample):
-            self.model += [nn.Upsample(scale_factor=2),
-                           Conv2dBlock(dim, dim // 2, 5, 1, 2, norm='ln', activation=activ, pad_type=pad_type)]
-            dim //= 2
-        # use reflection padding in the last conv layer
-        self.model += [Conv2dBlock(dim, output_dim, 7, 1, 3, norm='none', activation='tanh', pad_type=pad_type)]
-        self.model = nn.Sequential(*self.model)
+        # self.model = []
+        # # AdaIN residual blocks
+        # self.model += [ResBlocks(n_res, dim, res_norm, activ, pad_type=pad_type)]
+        # # upsampling blocks
+        # for i in range(n_upsample):
+        #     self.model += [nn.Upsample(scale_factor=2),
+        #                    Conv2dBlock(dim, dim // 2, 5, 1, 2, norm='ln', activation=activ, pad_type=pad_type)]
+        #     dim //= 2
+        # # use reflection padding in the last conv layer
+        # self.model += [Conv2dBlock(dim, output_dim, 7, 1, 3, norm='none', activation='tanh', pad_type=pad_type)]
+        # self.model = nn.Sequential(*self.model)
+
+        outplanes = [64, 256, 512, 1024]
+
+
+        layers = [3, 4, 6, 3] # resnet50
+        block = DeBottleneck
+        self.stylize4 = AdaptiveInstanceNorm2d(512 * block.expansion)
+        self.layer4 = self._make_layer(block, 512, layers[3], outplanes[3])
+
+        self.stylize3 = AdaptiveInstanceNorm2d(256 * block.expansion)
+        self.layer3 = self._make_layer(block, 256, layers[2], outplanes[2], upsample=nn.Upsample(scale_factor=2))
+
+        self.stylize2 = AdaptiveInstanceNorm2d(128 * block.expansion)
+        self.layer2 = self._make_layer(block, 128, layers[1], outplanes[1], upsample=nn.Upsample(scale_factor=2))
+
+        self.stylize1 = AdaptiveInstanceNorm2d(64 * block.expansion)
+        self.layer1 = self._make_layer(block, 64,  layers[0], outplanes[0])
+
+        self.stylize0 = AdaptiveInstanceNorm2d(64)
+        self.layer0 = nn.Sequential(
+            nn.Upsample(scale_factor=4),
+            nn.Conv2d(64, output_dim, kernel_size=7, stride=1, padding=3),
+            nn.BatchNorm2d(output_dim),
+            nn.ReLU()
+        )
+
 
     def forward(self, x):
-        return self.model(x)
+        x = self.stylize4(x)
+        x = self.layer4(x)
+        x = self.stylize3(x)
+        x = self.layer3(x)
+        x = self.stylize2(x)
+        x = self.layer2(x)
+        x = self.stylize1(x)
+        x = self.layer1(x)
+        x = self.stylize0(x)
+        x = self.layer0(x)
+
+        return x
+
+    def _make_layer(self, block, planes, blocks, outplanes, upsample=None):
+
+        layers = []
+
+        for i in range(1, blocks):
+            layers.append(block(planes * block.expansion, planes ))
+
+        lastModule = None
+        if outplanes != planes * block.expansion:
+            lastModule = nn.Sequential(
+                nn.Conv2d(planes * block.expansion, outplanes,
+                          kernel_size=1, bias=False),
+                nn.BatchNorm2d(outplanes),
+            )
+
+        layers.append(block(outplanes, planes, lastModule, upsample))
+
+
+        return nn.Sequential(*layers)
 
 class ResBlocks(nn.Module):
     def __init__(self, num_blocks, dim, norm, activation, pad_type):
@@ -118,6 +175,58 @@ class MLP(nn.Module):
 ##################################################################################
 # Basic Blocks
 ##################################################################################
+class DeBottleneck(nn.Module):
+    expansion = 4
+    def __init__(self, out_channels, mid_channels, lastModule=None, upsample=None):
+        super(DeBottleneck, self).__init__()
+
+
+        self.stride = 1
+
+        self.conv1 = nn.Conv2d(mid_channels * self.expansion, mid_channels, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(mid_channels)
+
+        self.conv2 = nn.Conv2d(mid_channels, mid_channels, kernel_size=3, bias=False, padding=1)
+        self.bn2 = nn.BatchNorm2d(mid_channels)
+
+        self.conv3 = nn.Conv2d(mid_channels, out_channels, kernel_size=1, bias=False)
+        self.bn3 = nn.BatchNorm2d(out_channels)
+
+        # original padding is 1; original dilation is 1
+
+        self.lastModule = lastModule
+        self.upsample = upsample
+
+        self.relu = nn.ReLU(inplace=True)
+
+
+    def forward(self, x):
+
+        out = x
+
+        if self.upsample is not None:
+            out = self.upsample(out)
+        if self.lastModule is not None:
+            residual = self.lastModule(out)
+        else:
+            residual = out
+
+        out = self.conv1(out)
+        out = self.bn1(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
+        out = self.relu(out)
+
+        out += residual
+
+        out = self.relu(out)
+
+        return out
 
 
 class ResBlock(nn.Module):
