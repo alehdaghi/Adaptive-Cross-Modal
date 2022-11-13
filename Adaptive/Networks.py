@@ -106,7 +106,7 @@ class Decoder(nn.Module):
             nn.Upsample(scale_factor=4),
             nn.Conv2d(64, output_dim, kernel_size=7, stride=1, padding=3),
             nn.BatchNorm2d(output_dim),
-            nn.ReLU()
+            nn.ReLU(inplace=True)
         )
 
 
@@ -213,6 +213,7 @@ class DeBottleneck(nn.Module):
 
         out = self.conv1(out)
         out = self.bn1(out)
+        out = self.relu(out)
 
         out = self.conv2(out)
         out = self.bn2(out)
@@ -220,7 +221,7 @@ class DeBottleneck(nn.Module):
 
         out = self.conv3(out)
         out = self.bn3(out)
-        out = self.relu(out)
+
 
         out += residual
 
