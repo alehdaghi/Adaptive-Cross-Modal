@@ -47,17 +47,13 @@ class ModelAdaptive(nn.Module):
         if not self.training and with_feature == False:
             return self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=with_feature)
 
-        if with_feature:
-            feat_pool, id_score, x4, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=1,
-                                                                 with_feature=True)
-            cam_feat, cam_score = self.camera_id(xIR, person_mask)
-            return feat_pool, id_score, cam_feat, cam_score, x4
 
-        else:
-            feat_pool, id_score, x4, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=False)
+        feat_pool, id_score, x4, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=True)
 
         if modal == 0:
             x = torch.cat((xRGB, xIR), dim=0)
+        elif modal == 1:
+            x = xRGB
         else:
             x = xIR
 
@@ -112,14 +108,18 @@ class ModelAdaptive(nn.Module):
 
 
     def freeze_person(self):
-        self.setGrad(self.person_id, False)
-        self.setGrad(self.camera_id, False)
+        self.person_id.eval()
+        self.camera_id.eval()
+        # self.setGrad(self.person_id, False)
+        # self.setGrad(self.camera_id, False)
         # self.setGrad(self.person_id.bottleneck, False)
         # self.setGrad(self.person_id.classifier, False)
 
     def unFreeze_person(self):
-        self.setGrad(self.person_id, True)
-        self.setGrad(self.camera_id, True)
+        self.person_id.train()
+        self.camera_id.train()
+        # self.setGrad(self.person_id, True)
+        # self.setGrad(self.camera_id, True)
         # self.setGrad(self.person_id.bottleneck, True)
         # self.setGrad(self.person_id.classifier, True)
 
@@ -233,10 +233,10 @@ class embed_net(nn.Module):
         elif modal == 3:
             x = self.z_module(xZ)
 
-        x = self.base_resnet.resnet_part2[0](x)  # layer2
-        x = self.base_resnet.resnet_part2[1](x)  # layer3
-        x3 = x
-        x = self.base_resnet.resnet_part2[2](x)  # layer4
+        x = self.base_resnet.resnet_part2(x)  # layer2
+        # x = self.base_resnet.resnet_part2[1](x)  # layer3
+        # x3 = x
+        # x = self.base_resnet.resnet_part2[2](x)  # layer4
 
         person_mask = self.compute_mask(x)
         feat_pool = self.gl_pool(x, self.gm_pool)

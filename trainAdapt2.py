@@ -565,6 +565,39 @@ def test(epoch):
     writer.add_scalar('mINP_att', mINP_att, epoch)
     return cmc, mAP, mINP, cmc_att, mAP_att, mINP_att
 
+def validate(epoch):
+    global best_acc, best_epoch
+    cmc, mAP, mINP, cmc_att, mAP_att, mINP_att = test(epoch)
+    # save model
+    if max(mAP, mAP_att) > best_acc:  # not the real best for sysu-mm01
+        best_acc = max(mAP, mAP_att)
+        best_epoch = epoch
+        state = {
+            'net': net.state_dict(),
+            'cmc': cmc_att,
+            'mAP': mAP_att,
+            'mINP': mINP_att,
+            'epoch': epoch,
+        }
+        torch.save(state, checkpoint_path + suffix + '_best.t')
+
+    # save model
+    if epoch > 10 and epoch % args.save_epoch == 0:
+        state = {
+            'net': net.state_dict(),
+            'cmc': cmc,
+            'mAP': mAP,
+            'epoch': epoch,
+        }
+        torch.save(state, checkpoint_path + suffix + '_epoch_{}.t'.format(epoch))
+
+    print(
+        'POOL:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}| mINP: {:.2%}'.format(
+            cmc[0], cmc[4], cmc[9], cmc[19], mAP, mINP))
+    print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}| mINP: {:.2%}'.format(
+        cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att, mINP_att))
+    print('Best Epoch [{}]'.format(best_epoch))
+
 
 # training
 print('==> Start Training...')
@@ -589,38 +622,9 @@ for epoch in range(start_epoch, 121):
                                   sampler=sampler, num_workers=args.workers, drop_last=True)
 
     # training
-    train(epoch)
 
+    train(epoch)
     if epoch >= 0 and epoch % 4 == 0:
         print('Test Epoch: {}'.format(epoch))
+        validate(epoch)
 
-        # testing
-        cmc, mAP, mINP, cmc_att, mAP_att, mINP_att = test(epoch)
-        # save model
-        if max(mAP, mAP_att) > best_acc:  # not the real best for sysu-mm01
-            best_acc = max(mAP, mAP_att)
-            best_epoch = epoch
-            state = {
-                'net': net.state_dict(),
-                'cmc': cmc_att,
-                'mAP': mAP_att,
-                'mINP': mINP_att,
-                'epoch': epoch,
-            }
-            torch.save(state, checkpoint_path + suffix + '_best.t')
-
-        # save model
-        if epoch > 10 and epoch % args.save_epoch == 0:
-            state = {
-                'net': net.state_dict(),
-                'cmc': cmc,
-                'mAP': mAP,
-                'epoch': epoch,
-            }
-            torch.save(state, checkpoint_path + suffix + '_epoch_{}.t'.format(epoch))
-
-        print('POOL:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}| mINP: {:.2%}'.format(
-            cmc[0], cmc[4], cmc[9], cmc[19], mAP, mINP))
-        print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}| mINP: {:.2%}'.format(
-            cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att, mINP_att))
-        print('Best Epoch [{}]'.format(best_epoch))
