@@ -97,7 +97,7 @@ class ModelAdaptive(nn.Module):
         adain_params = self.mlp(style)
         assign_adain_params(adain_params, self.adaptor)
         alpha = 1  # (min(epoch, 30) + 1) / 31
-        xAdapt = (alpha) * self.adaptor(content)  # + (1-alpha) * torch.rand(b, 3, 1, 1).cuda()
+        xAdapt = self.adaptor(content)  # + (1-alpha) * torch.rand(b, 3, 1, 1).cuda()
 
         xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5).detach()
         xZ = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)

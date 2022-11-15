@@ -350,27 +350,30 @@ def trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss):
     return
 
 def trainGen_ID(epoch, featRGB, feat_Z, out0_Z, labels_Z, camera_Ir, camera_feat_Z,
-                camera_out0_Z, cameras_Z, gray_loss, xAdapt):
+                camera_out0_Z, cameras_Z, gray_loss, xAdapt, xRGB):
 
     # color_feat, thermal_feat = torch.split(feat, cameras.shape[0] // 2)
     # color_cam_feat, thermal_cam_feat= torch.split(camera_feat, cameras.shape[0] // 2)
 
-    loss_ID = criterion_id(out0_Z, labels_Z)
+    loss_reconst = 10 * reconst_loss(xAdapt, xRGB)
+    # loss_ID = criterion_id(out0_Z, labels_Z)
 
-    loss_camID = criterion_id(camera_out0_Z, cameras_Z - 1)
-    loss_color2gray = 10 * reconst_loss(featRGB.detach(), feat_Z)
-    loss_thermal2gray = 10 * reconst_loss(camera_Ir.detach(), camera_feat_Z)
+    # loss_camID = criterion_id(camera_out0_Z, cameras_Z - 1)
+    # loss_color2gray = 10 * reconst_loss(featRGB.detach(), feat_Z)
 
-    normilizeLoss = (1 - xAdapt.sum(dim=1)).pow(2).mean() * 10
+    # loss_thermal2gray = 10 * reconst_loss(camera_Ir.detach(), camera_feat_Z)
 
-    loss = loss_ID + loss_camID + loss_color2gray + loss_thermal2gray + normilizeLoss
+    # normilizeLoss = (1 - xAdapt.sum(dim=1)).pow(2).mean() * 10
+
+    # loss = loss_ID + loss_camID + loss_color2gray + loss_thermal2gray + normilizeLoss
+    loss = loss_reconst #+ loss_ID + loss_color2gray
     gray_loss.update(loss.item(), cameras_Z.size(0))
 
     adaptor_optimizer.zero_grad()
     loss.backward()
     # adaptor_optimizer.step()
 is_train_generator = True
-use_pre_feature = True
+use_pre_feature = False
 
 if is_train_generator:
     featRGB_all = torch.empty(trainset.train_color_label.size, net.person_id.pool_dim)
@@ -453,8 +456,10 @@ def train(epoch):
                 camera_Ir = camera_Ir_all[t_index].cuda()
                 featRGBX4 = featRGBX4_all[c_index].cuda()
             else:
-                featRGB, _, featRGBX4, _ = net.person_id(xRGB=input1, xIR=None, modal=1, with_feature=True)
-                camera_Ir, _ = net.camera_id(input2.cuda(), None)
+                with torch.no_grad():
+                    featRGB, _, featRGBX4, _ = net.person_id(xRGB=input1, xIR=None, modal=1, with_feature=True)
+                    camera_Ir, _ = net.camera_id(input2, None)
+                    camera_RGB, _ = net.camera_id(input1, None)
 
             # with torch.no_grad():
             #     featRGB , _, camera_Ir, _, featRGBX4 = net(input1, input2, modal=args.uni, epoch=epoch, with_feature=True)
@@ -467,14 +472,15 @@ def train(epoch):
 
 
         if is_train_generator:
-            xZ, xAdapt = net.generate(epoch, xRGB=input1, content=featRGBX4, style=camera_Ir, xIR=input2)
-            feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
+            xZ, xAdapt = net.generate(epoch, xRGB=input1, content=featRGBX4, style=camera_RGB, xIR=input2)
+            feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = None, None, None, None
+            # feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
             trainGen_ID(epoch, featRGB, feat_Z, out0_Z, label1, camera_Ir, camera_feat_Z, camera_out0_Z,
-                        cam2, gray_loss, xAdapt)
-            _, predicted = camera_out0_Z.max(1)
-            correct += (predicted.eq(cam2-1).sum().item() / 2)
-            _, predicted = out0_Z.max(1)
-            correct += (predicted.eq(label1).sum().item() / 2)
+                        cam2, gray_loss, xAdapt, input1)
+            # _, predicted = camera_out0_Z.max(1)
+            # correct += (predicted.eq(cam2-1).sum().item() / 2)
+            # _, predicted = out0_Z.max(1)
+            # correct += (predicted.eq(label1).sum().item() / 2)
         else:
             _, predicted = out0.max(1)
             correct += (predicted.eq(labels).sum().item() / 2)
