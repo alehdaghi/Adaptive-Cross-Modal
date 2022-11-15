@@ -478,7 +478,7 @@ def train(epoch):
             trainGen_ID(epoch, featRGB, feat_Z, out0_Z, label1, camera_Ir, camera_feat_Z, camera_out0_Z,
                         cam2, gray_loss, xAdapt, input1)
             _, predicted = camera_out0_Z.max(1)
-            correct += (predicted.eq(cam2-1).sum().item() / 2)
+            correct += (predicted.eq(cam1-1).sum().item() / 2)
             _, predicted = out0_Z.max(1)
             correct += (predicted.eq(label1).sum().item() / 2)
         else:
