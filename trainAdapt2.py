@@ -635,5 +635,6 @@ for epoch in range(start_epoch, 121):
     train(epoch)
     if epoch >= 0 and epoch % 4 == 0:
         print('Test Epoch: {}'.format(epoch))
+        # if is_train_generator is False:
         validate(epoch)
 
