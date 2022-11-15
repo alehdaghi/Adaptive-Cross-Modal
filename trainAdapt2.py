@@ -359,7 +359,7 @@ def trainGen_ID(epoch, featRGB, feat_Z, camera_Ir, camera_feat_Z,
     loss_color2gray = 30 * reconst_loss(featRGB.detach(), feat_Z)
     loss_thermal2gray = 30 * reconst_loss(camera_Ir.detach(), camera_feat_Z)
 
-    normilizeLoss = (1 - xAdapt.sum(dim=1)).mean() * 30
+    normilizeLoss = (1 - xAdapt.sum(dim=1).pow(2)).mean() * 30
 
     loss = loss_camID + loss_color2gray + loss_thermal2gray + normilizeLoss
     gray_loss.update(loss.item(), cameras_Z.size(0))
