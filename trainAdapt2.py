@@ -372,7 +372,8 @@ if is_train_generator:
     featRGBX4_all = torch.empty(trainset.train_color_label.size, net.person_id.pool_dim, 18 , 9)
 
 def loadAllFeat():
-    if is_train_generator:
+
+    if is_train_generator is False:
         return
     net.eval()
     availabeIDS = np.unique(trainset.train_color_label)
