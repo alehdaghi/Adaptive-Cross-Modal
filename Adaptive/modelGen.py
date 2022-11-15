@@ -99,8 +99,8 @@ class ModelAdaptive(nn.Module):
         alpha = 1  # (min(epoch, 30) + 1) / 31
         xAdapt = self.adaptor(content)  # + (1-alpha) * torch.rand(b, 3, 1, 1).cuda()
 
-        xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5).detach()
-        xZ = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
+        # xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5).detach()
+        xZ = xAdapt #(xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
 
         # for i in range(b):
         #     invTrans(xNorm[i].detach()).save('images/N' + str(i) + '.png')
