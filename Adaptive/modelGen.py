@@ -16,14 +16,17 @@ import numpy as np
 from sup_con_loss import SupConLoss
 import torchvision.transforms as transforms
 
+
 class Between(object):
     """
     truncate between range [0, 1].
     """
+
     def __call__(self, tensor):
         tensor[tensor < 0] = 0
         tensor[tensor > 1] = 1
         return tensor
+
 
 invTrans = transforms.Compose([
     transforms.Normalize(mean=[0., 0., 0.], std=[1 / 0.229, 1 / 0.224, 1 / 0.225]),
@@ -47,7 +50,6 @@ class ModelAdaptive(nn.Module):
         if not self.training and with_feature == False:
             return self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=with_feature)
 
-
         feat_pool, id_score, x4, person_mask = self.person_id(xRGB=xRGB, xIR=xIR, modal=modal, with_feature=True)
 
         if modal == 0:
@@ -58,8 +60,6 @@ class ModelAdaptive(nn.Module):
             x = xIR
 
         cam_feat, cam_score = self.camera_id(x, person_mask)
-
-
 
         # adain_params = self.mlp(cam_feat[b:])
         # assign_adain_params(adain_params, self.adaptor)
@@ -74,9 +74,9 @@ class ModelAdaptive(nn.Module):
         #     invTrans(xRGB[i].detach()).save('images/V' + str(i) + '.png')
         #     invTrans(xIR[i].detach()).save('images/T' + str(i) + '.png')
 
-            # cv2.imwrite('Z' + str(i) + '.png', fakeImg[i])
-            # cv2.imwrite('V' + str(i) + '.png', realRGB[i])
-            # cv2.imwrite('T' + str(i) + '.png', realIR[i])
+        # cv2.imwrite('Z' + str(i) + '.png', fakeImg[i])
+        # cv2.imwrite('V' + str(i) + '.png', realRGB[i])
+        # cv2.imwrite('T' + str(i) + '.png', realIR[i])
 
         # self.freeze_person()
         # feat_poolAdapt, id_scoreAdapt, x3Adapt, person_maskAdapt = self.person_id(xRGB=None, xIR=None, xZ=xAdapt,
@@ -84,42 +84,51 @@ class ModelAdaptive(nn.Module):
         # cam_featAdapt, cam_scoreAdapt = self.camera_id(x3Adapt, person_mask[:b])
         # self.unFreeze_person()
 
-        if with_feature :
+        if with_feature:
             return feat_pool, id_score, cam_feat, cam_score, x4
 
         return feat_pool, id_score, cam_feat, cam_score
         # return torch.cat((feat_pool, feat_poolAdapt), 0), torch.cat((id_score, id_scoreAdapt), 0), \
         #        torch.cat((cam_feat, cam_featAdapt), 0), torch.cat((cam_score, cam_scoreAdapt), 0)
 
-    def generate(self, epoch, xRGB, content, style):
+    def generate(self, epoch, xRGB, content, style, xIR=None):
 
         b = xRGB.shape[0]
         adain_params = self.mlp(style)
         assign_adain_params(adain_params, self.adaptor)
-        alpha = 1 #(min(epoch, 30) + 1) / 31
-        xAdapt = (alpha) * self.adaptor(content) #+ (1-alpha) * torch.rand(b, 3, 1, 1).cuda()
+        alpha = 1  # (min(epoch, 30) + 1) / 31
+        xAdapt = (alpha) * self.adaptor(content)  # + (1-alpha) * torch.rand(b, 3, 1, 1).cuda()
+
         xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5).detach()
-        xAdapt = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
-        return xAdapt
+        xZ = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
+
+        # for i in range(b):
+        #     invTrans(xNorm[i].detach()).save('images/N' + str(i) + '.png')
+        #     invTrans(xZ[i].detach()).save('images/Z' + str(i) + '.png')
+        #     invTrans(xRGB[i].detach()).save('images/V' + str(i) + '.png')
+        #     if xIR != None:
+        #         invTrans(xIR[i].detach()).save('images/I' + str(i) + '.png')
+
+        return xZ, xAdapt
 
     def setGrad(self, module, grad):
         for param in module.parameters():
             param.requires_grad = grad
 
-
     def freeze_person(self):
         self.person_id.eval()
         self.camera_id.eval()
-        # self.setGrad(self.person_id, False)
-        # self.setGrad(self.camera_id, False)
+        self.setGrad(self.person_id, False)
+        self.setGrad(self.camera_id, False)
         # self.setGrad(self.person_id.bottleneck, False)
         # self.setGrad(self.person_id.classifier, False)
 
     def unFreeze_person(self):
+        self.setGrad(self.person_id, True)
+        self.setGrad(self.camera_id, True)
         self.person_id.train()
         self.camera_id.train()
-        # self.setGrad(self.person_id, True)
-        # self.setGrad(self.camera_id, True)
+
         # self.setGrad(self.person_id.bottleneck, True)
         # self.setGrad(self.person_id.classifier, True)
 
@@ -139,7 +148,6 @@ class Camera_net(nn.Module):
         self.pool_dim = 512
         # self.encoder = base_resnet(arch=arch).resnet_part2[2]  # layer4
         self.encoder = torch.nn.Sequential(ShallowModule('resnet18'), base_resnet('resnet18'))
-
 
         self.dim = 0
         # self.part_num = 5
@@ -171,6 +179,20 @@ class Camera_net(nn.Module):
         return cam_feat, self.camera_classifier(cam_feat)
 
 
+class Discriminator(nn.Module):
+    def __init__(self):
+        super(Discriminator, self).__init__()
+        # self.encoder = base_resnet(arch=arch).resnet_part2[2]  # layer4
+        resnet = torchvision.models.resnet18(weights='ResNet18_Weights.DEFAULT')
+        self.model = torch.nn.Sequential(resnet.conv1, resnet.bn1, nn.ReLU(inplace=True), resnet.maxpool,
+                                         resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4)
+        self.discriminator = nn.Linear(512, 2, bias=True)
+
+    def forward(self, x):
+        feat = self.model(x)
+        return self.discriminator(feat)
+
+
 class embed_net(nn.Module):
     def __init__(self, class_num, no_local='on', gm_pool='on', arch='resnet50', camera_num=6):
         super(embed_net, self).__init__()
@@ -190,7 +212,6 @@ class embed_net(nn.Module):
         # self.part_num = 5
 
         activation = nn.Sigmoid()
-
 
         self.l2norm = Normalize(2)
 

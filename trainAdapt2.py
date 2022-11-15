@@ -350,7 +350,7 @@ def trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss):
     return
 
 def trainGen_ID(epoch, featRGB, feat_Z, camera_Ir, camera_feat_Z,
-                camera_out0_Z, cameras_Z, gray_loss):
+                camera_out0_Z, cameras_Z, gray_loss, xAdapt):
 
     # color_feat, thermal_feat = torch.split(feat, cameras.shape[0] // 2)
     # color_cam_feat, thermal_cam_feat= torch.split(camera_feat, cameras.shape[0] // 2)
@@ -359,13 +359,17 @@ def trainGen_ID(epoch, featRGB, feat_Z, camera_Ir, camera_feat_Z,
     loss_color2gray = 30 * reconst_loss(featRGB.detach(), feat_Z)
     loss_thermal2gray = 30 * reconst_loss(camera_Ir.detach(), camera_feat_Z)
 
-    loss = loss_camID + loss_color2gray + loss_thermal2gray
+    normilizeLoss = (1 - xAdapt.sum(dim=1)).mean() * 30
+
+    loss = loss_camID + loss_color2gray + loss_thermal2gray + normilizeLoss
     gray_loss.update(loss.item(), cameras_Z.size(0))
 
     adaptor_optimizer.zero_grad()
     loss.backward()
     # adaptor_optimizer.step()
 is_train_generator = True
+use_pre_feature = True
+
 if is_train_generator:
     featRGB_all = torch.empty(trainset.train_color_label.size, net.person_id.pool_dim)
     camera_Ir_all = torch.empty(trainset.train_ir_label.size, net.camera_id.pool_dim)
@@ -373,7 +377,7 @@ if is_train_generator:
 
 def loadAllFeat():
 
-    if is_train_generator is False:
+    if is_train_generator is False or use_pre_feature is False:
         return
     net.eval()
     availabeIDS = np.unique(trainset.train_color_label)
@@ -441,9 +445,13 @@ def train(epoch):
         data_time.update(time.time() - end)
 
         if is_train_generator:
-            featRGB = featRGB_all[c_index].cuda()
-            camera_Ir = camera_Ir_all[t_index].cuda()
-            featRGBX4 = featRGBX4_all[c_index].cuda()
+            if use_pre_feature:
+                featRGB = featRGB_all[c_index].cuda()
+                camera_Ir = camera_Ir_all[t_index].cuda()
+                featRGBX4 = featRGBX4_all[c_index].cuda()
+            else:
+                featRGB, _, featRGBX4, _ = net.person_id(xRGB=input1, xIR=None, modal=1, with_feature=True)
+                camera_Ir, _ = net.camera_id(input2.cuda(), None)
 
             # with torch.no_grad():
             #     featRGB , _, camera_Ir, _, featRGBX4 = net(input1, input2, modal=args.uni, epoch=epoch, with_feature=True)
@@ -456,10 +464,10 @@ def train(epoch):
 
 
         if is_train_generator:
-            xZ = net.generate(epoch, xRGB=input1, content=featRGBX4, style=camera_Ir)
+            xZ, xAdapt = net.generate(epoch, xRGB=input1, content=featRGBX4, style=camera_Ir, xIR=input2)
             feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
             trainGen_ID(epoch, featRGB, feat_Z, camera_Ir, camera_feat_Z, camera_out0_Z,
-                        cam2, gray_loss)
+                        cam2, gray_loss, xAdapt)
             _, predicted = camera_out0_Z.max(1)
             correct += (predicted.eq(cam2-1).sum().item() / 2)
         else:
