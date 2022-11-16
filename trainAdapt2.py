@@ -324,11 +324,11 @@ def trainRe_ID(epoch, feat, out0, labels, train_loss, id_loss, tri_loss, gray_lo
     tri_loss.update(loss_tri.item(), labels.size(0))
     # gray_loss.update(loss_color2gray.item(), labels.size(0))
 
-    optimizer.zero_grad()
-    loss.backward()
+    # optimizer.zero_grad()
+    # loss.backward()
     # optimizer.step()
 
-    return
+    return loss
 
 def trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss):
     # color_feat, thermal_feat, gray_feat = torch.split(feat, cameras.shape[0] // 3)
@@ -343,11 +343,11 @@ def trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss):
 
     camera_loss.update(loss.item(), cameras.size(0))
 
-    adaptor_optimizer.zero_grad()
-    loss.backward()
+    # adaptor_optimizer.zero_grad()
+    # loss.backward()
     # adaptor_optimizer.step()
 
-    return
+    return loss
 
 def trainGen_ID(epoch, featRGB, feat_Z, out0_Z, labels_Z, camera_Ir, camera_feat_Z,
                 camera_out0_Z, cameras_Z, gray_loss, xAdapt, xRGB):
@@ -355,34 +355,36 @@ def trainGen_ID(epoch, featRGB, feat_Z, out0_Z, labels_Z, camera_Ir, camera_feat
     # color_feat, thermal_feat = torch.split(feat, cameras.shape[0] // 2)
     # color_cam_feat, thermal_cam_feat= torch.split(camera_feat, cameras.shape[0] // 2)
 
-    loss_reconst = reconst_loss(xAdapt, xRGB)
+    # loss_reconst = reconst_loss(xAdapt, xRGB)
     loss_ID = 2 * criterion_id(out0_Z, labels_Z)
 
-    # loss_camID = criterion_id(camera_out0_Z, cameras_Z - 1)
+    loss_camID = criterion_id(camera_out0_Z, cameras_Z - 1)
     loss_color2gray = reconst_loss(featRGB.detach(), feat_Z)
 
-    # loss_thermal2gray = 10 * reconst_loss(camera_Ir.detach(), camera_feat_Z)
+    loss_thermal2gray = reconst_loss(camera_Ir.detach(), camera_feat_Z)
 
     # normilizeLoss = (1 - xAdapt.sum(dim=1)).pow(2).mean() * 10
 
-    # loss = loss_ID + loss_camID + loss_color2gray + loss_thermal2gray + normilizeLoss
-    loss = loss_reconst + loss_ID + loss_color2gray
+    loss = loss_ID + loss_camID + loss_color2gray + loss_thermal2gray #+ normilizeLoss
+    # loss = loss_reconst + loss_ID + loss_color2gray + loss_camID
     gray_loss.update(loss.item(), cameras_Z.size(0))
 
-    adaptor_optimizer.zero_grad()
-    loss.backward()
+    # adaptor_optimizer.zero_grad()
+    # loss.backward()
     # adaptor_optimizer.step()
-is_train_generator = True
+    return loss
+
+train_only_generator = False
 use_pre_feature = False
 
-if is_train_generator:
+if train_only_generator:
     featRGB_all = torch.empty(trainset.train_color_label.size, net.person_id.pool_dim)
     camera_Ir_all = torch.empty(trainset.train_ir_label.size, net.camera_id.pool_dim)
     featRGBX4_all = torch.empty(trainset.train_color_label.size, net.person_id.pool_dim, 18 , 9)
 
 def loadAllFeat():
 
-    if is_train_generator is False or use_pre_feature is False:
+    if train_only_generator is False or use_pre_feature is False:
         return
     net.eval()
     availabeIDS = np.unique(trainset.train_color_label)
@@ -422,7 +424,7 @@ def train(epoch):
     end = time.time()
 
 
-    if is_train_generator:
+    if train_only_generator:
         net.freeze_person()
 
 
@@ -450,7 +452,7 @@ def train(epoch):
         labels = Variable(labels.cuda())
         data_time.update(time.time() - end)
 
-        if is_train_generator:
+        if train_only_generator:
             if use_pre_feature:
                 featRGB = featRGB_all[c_index].cuda()
                 camera_Ir = camera_Ir_all[t_index].cuda()
@@ -466,31 +468,34 @@ def train(epoch):
                 # featRGBX4, featIrX4 = torch.split(x4, bs)
                 # camera_RGB, camera_Ir = torch.split(camera_feat, bs)
         else:
-            feat, out0, camera_feat, camera_out0 = net(input1, input2, modal=args.uni, epoch=epoch)
+            feat, out0, camera_feat, camera_out0, featX4 = net(input1, input2, modal=args.uni, epoch=epoch, with_feature=True)
+            featRGB, featIR = feat.split(bs)
+            featRGBX4, featIRX4 = featX4.split(bs)
+            camera_RGB, camera_Ir = camera_feat.split(bs)
 
         #correct += (batch_acc / 2)
 
+        xZ, xAdapt = net.generate(epoch, xRGB=input1, content=featRGBX4, style=camera_RGB, xIR=input2)
+        # feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = None, None, None, None
+        feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
+        loss = trainGen_ID(epoch, featRGB, feat_Z, out0_Z, label1, camera_Ir, camera_feat_Z, camera_out0_Z,
+                    cam2, gray_loss, xAdapt, input1)
+        _, predicted = camera_out0_Z.max(1)
+        correct += (predicted.eq(cam1 - 1).sum().item() / 2)
+        _, predicted = out0_Z.max(1)
+        correct += (predicted.eq(label1).sum().item() / 2)
 
-        if is_train_generator:
-            xZ, xAdapt = net.generate(epoch, xRGB=input1, content=featRGBX4, style=camera_RGB, xIR=input2)
-            # feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = None, None, None, None
-            feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
-            trainGen_ID(epoch, featRGB, feat_Z, out0_Z, label1, camera_Ir, camera_feat_Z, camera_out0_Z,
-                        cam2, gray_loss, xAdapt, input1)
-            _, predicted = camera_out0_Z.max(1)
-            correct += (predicted.eq(cam1-1).sum().item() / 2)
-            _, predicted = out0_Z.max(1)
-            correct += (predicted.eq(label1).sum().item() / 2)
-        else:
+        if train_only_generator is False:
             _, predicted = out0.max(1)
             correct += (predicted.eq(labels).sum().item() / 2)
-            trainRe_ID(epoch, feat, out0, labels, train_loss, id_loss, tri_loss, gray_loss)
-            trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss)
-            optimizer.step()
+            loss += trainRe_ID(epoch, feat, out0, labels, train_loss, id_loss, tri_loss, gray_loss)
+            loss += trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss)
 
-
-
+        optimizer.zero_grad()
+        adaptor_optimizer.zero_grad()
+        loss.backward()
         adaptor_optimizer.step()
+        optimizer.step()
 
         # part_loss.update(partsMap['loss_body_cont'].item(), 2 * input1.size(0))
         total += labels.size(0)
