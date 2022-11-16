@@ -232,7 +232,7 @@ if len(args.resume) > 0:
         checkpoint = torch.load(model_path)
         start_epoch = 0 #checkpoint['epoch'] + 1
         try:
-            net.load_state_dict(checkpoint['net'], strict=False)
+            net.load_state_dict(checkpoint['net'], strict=True)
         except:
             pass
         print('==> loaded checkpoint {} (epoch {})'
@@ -638,8 +638,8 @@ for epoch in range(start_epoch, 121):
     trainset.cIndex = sampler.index1  # color index
     trainset.tIndex = sampler.index2  # thermal index
     print(epoch)
-    print(trainset.cIndex)
-    print(trainset.tIndex)
+    # print(trainset.cIndex)
+    # print(trainset.tIndex)
 
     loader_batch = args.batch_size * args.num_pos
 
@@ -649,7 +649,7 @@ for epoch in range(start_epoch, 121):
     # training
 
     train(epoch)
-    if epoch >= 0 and epoch % 4 == 0:
+    if epoch >= 0 and epoch % 20 == 0:
         print('Test Epoch: {}'.format(epoch))
         # if is_train_generator is False:
         validate(epoch)
