@@ -110,16 +110,21 @@ class Decoder(nn.Module):
         )
 
 
-    def forward(self, x):
-        x = self.stylize4(x)
+    def forward(self, x, transfer_style=True):
+        if transfer_style:
+            x = self.stylize4(x)
         x = self.layer4(x)
-        x = self.stylize3(x)
+        if transfer_style:
+            x = self.stylize3(x)
         x = self.layer3(x)
-        x = self.stylize2(x)
+        if transfer_style:
+            x = self.stylize2(x)
         x = self.layer2(x)
-        x = self.stylize1(x)
+        if transfer_style:
+            x = self.stylize1(x)
         x = self.layer1(x)
-        x = self.stylize0(x)
+        if transfer_style:
+            x = self.stylize0(x)
         x = self.layer0(x)
 
         return x

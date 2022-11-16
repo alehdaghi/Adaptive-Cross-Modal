@@ -91,13 +91,15 @@ class ModelAdaptive(nn.Module):
         # return torch.cat((feat_pool, feat_poolAdapt), 0), torch.cat((id_score, id_scoreAdapt), 0), \
         #        torch.cat((cam_feat, cam_featAdapt), 0), torch.cat((cam_score, cam_scoreAdapt), 0)
 
-    def generate(self, epoch, xRGB, content, style, xIR=None):
+    def generate(self, epoch, xRGB, content, style, xIR=None, transfer_style=True):
 
         b = xRGB.shape[0]
-        adain_params = self.mlp(style)
-        assign_adain_params(adain_params, self.adaptor)
+        if transfer_style:
+            adain_params = self.mlp(style)
+            assign_adain_params(adain_params, self.adaptor)
+
         alpha = 1  # (min(epoch, 30) + 1) / 31
-        xAdapt = self.adaptor(content)  # + (1-alpha) * torch.rand(b, 3, 1, 1).cuda()
+        xAdapt = self.adaptor(content, transfer_style)  # + (1-alpha) * torch.rand(b, 3, 1, 1).cuda()
 
         # xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5).detach()
         xZ = xAdapt #(xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
