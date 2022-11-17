@@ -401,7 +401,7 @@ def trainDisc_ID(epoch, xRGB, xIR, xZ, disc_loss):
 
 
 train_only_ReID = False
-train_only_generator = True
+train_only_generator = False
 use_pre_feature = False
 
 if train_only_generator:
