@@ -262,26 +262,25 @@ reconst_loss.to(device)
 criterion_contrastive = SupConLoss()
 
 if args.optim == 'sgd':
-    # ignored_params = list(map(id, net.person_id.bottleneck.parameters())) \
-    #                 + list(map(id, net.person_id.classifier.parameters())) \
-    #                 + list(map(id, net.person_id.z_module.parameters()))
-    #
-    # ids = set(map(id, net.person_id.parameters()))
-    # params = filter(lambda p: id(p) in ids, net.person_id.parameters())
-    # base_params = filter(lambda p: id(p) not in ignored_params, params)
+    ignored_params = list(map(id, net.person_id.bottleneck.parameters())) \
+                    + list(map(id, net.person_id.classifier.parameters())) \
+                    + list(map(id, net.person_id.z_module.parameters()))
 
-    gen_params = list(net.adaptor.parameters()) + list(net.mlp.parameters()) \
-                 #+ list(net.person_id.z_module.parameters()) + list(net.camera_id.parameters())
+    ids = set(map(id, net.person_id.parameters()))
+    params = filter(lambda p: id(p) in ids, net.person_id.parameters())
+    base_params = filter(lambda p: id(p) not in ignored_params, params)
 
-    reid_params = list(net.person_id.parameters()) + list(net.camera_id.parameters())
-    # optimizer = optim.SGD([
-    #     {'params': base_params, 'lr': 0.1 * args.lr},
-    #     {'params': net.camera_id.parameters(), 'lr': 0.1 * args.lr},
-    #     {'params': net.person_id.bottleneck.parameters(), 'lr': args.lr},
-    #     {'params': net.person_id.classifier.parameters(), 'lr': args.lr},
-    #     # {'params': gen_params, 'lr': args.lr}
-    #     ],
-    #     weight_decay=5e-4, momentum=0.9, nesterov=True)
+
+
+
+    optimizer = optim.SGD([
+        {'params': base_params, 'lr': 0.1 * args.lr},
+        {'params': net.camera_id.parameters(), 'lr': 0.1 * args.lr},
+        {'params': net.person_id.bottleneck.parameters(), 'lr': args.lr},
+        {'params': net.person_id.classifier.parameters(), 'lr': args.lr},
+        # {'params': gen_params, 'lr': args.lr}
+        ],
+        weight_decay=5e-4, momentum=0.9, nesterov=True)
 
     # adaptor_optimizer = optim.SGD([
     #     {'params': net.camera_id.parameters(), 'lr': 0.1 * args.lr},
@@ -289,7 +288,11 @@ if args.optim == 'sgd':
     #     # {'params': gen_params, 'lr': args.lr}
     # ],
     #     weight_decay=5e-4, momentum=0.9, nesterov=True)
-    optimizer = optim.Adam(reid_params, lr=0.0001, betas=(0.5, 0.999), weight_decay=0.0001)
+    #reid_params = list(net.person_id.parameters()) + list(net.camera_id.parameters())
+    # optimizer = optim.Adam(reid_params, lr=0.0001, betas=(0.5, 0.999), weight_decay=0.0001)
+
+    gen_params = list(net.adaptor.parameters()) + list(net.mlp.parameters()) \
+        # + list(net.person_id.z_module.parameters()) + list(net.camera_id.parameters())
     adaptor_optimizer = optim.Adam(gen_params, lr=0.0001, betas=(0.5, 0.999), weight_decay=0.0001)
 
 # exp_lr_scheduler = lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
@@ -377,7 +380,7 @@ def trainGen_ID(epoch, featRGB, feat_Z, out0_Z, labels_Z, camera_Ir, camera_feat
     # adaptor_optimizer.step()
     return loss
 
-train_only_ReID = False
+train_only_ReID = True
 train_only_generator = False
 use_pre_feature = False
 
@@ -497,9 +500,9 @@ def train(epoch):
             loss += trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss)
 
         optimizer.zero_grad()
-        adaptor_optimizer.zero_grad()
+        # adaptor_optimizer.zero_grad()
         loss.backward()
-        adaptor_optimizer.step()
+        # adaptor_optimizer.step()
         optimizer.step()
 
         # part_loss.update(partsMap['loss_body_cont'].item(), 2 * input1.size(0))
@@ -508,7 +511,7 @@ def train(epoch):
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
-        if batch_idx % 50 == 0:
+        if batch_idx % 1 == 0:
             print('Epoch: [{}][{}/{}] '
                   'T: {now} ({batch_time.avg:.3f}) '
                   'lr:{:.3f} '
@@ -654,7 +657,7 @@ for epoch in range(start_epoch, 121):
     # training
 
     train(epoch)
-    if epoch >= 0 and epoch % 20 == 0:
+    if epoch >= 0 and epoch % 4 == 0:
         print('Test Epoch: {}'.format(epoch))
         # if is_train_generator is False:
         validate(epoch)
