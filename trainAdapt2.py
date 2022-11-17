@@ -232,7 +232,7 @@ if len(args.resume) > 0:
         checkpoint = torch.load(model_path)
         start_epoch = 0 #checkpoint['epoch'] + 1
         try:
-            net.load_state_dict(checkpoint['net'], strict=True)
+            net.load_state_dict(checkpoint['net'], strict=False)
         except:
             pass
         print('==> loaded checkpoint {} (epoch {})'
