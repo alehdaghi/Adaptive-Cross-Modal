@@ -511,7 +511,7 @@ def train(epoch):
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
-        if batch_idx % 1 == 0:
+        if batch_idx % 50 == 0:
             print('Epoch: [{}][{}/{}] '
                   'T: {now} ({batch_time.avg:.3f}) '
                   'lr:{:.3f} '
