@@ -294,6 +294,7 @@ if args.optim == 'sgd':
     gen_params = list(net.adaptor.parameters()) + list(net.mlp.parameters()) \
         # + list(net.person_id.z_module.parameters()) + list(net.camera_id.parameters())
     adaptor_optimizer = optim.Adam(gen_params, lr=0.0001, betas=(0.5, 0.999), weight_decay=0.0001)
+    disc_optimizer = optim.Adam(net.discriminator.parameters(), lr=0.0001, betas=(0.5, 0.999), weight_decay=0.0001)
 
 # exp_lr_scheduler = lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 def adjust_learning_rate(optimizer, epoch):
@@ -355,33 +356,52 @@ def trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss):
 
     return loss
 
-def trainGen_ID(epoch, featRGB, feat_Z, out0_Z, labels_Z, camera_Ir, camera_feat_Z,
-                camera_out0_Z, cameras_Z, gray_loss, xAdapt, xRGB):
+def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
+                camera_feat_RGB, camera_feat_Ir, cameras_RGB, cameras_Ir, gray_loss, disc_loss):
+
+    xZ, xAdapt = net.generate(epoch, xRGB=xRGB, content=featRGBX4, style=camera_feat_Ir, xIR=xIR)
+    # feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = None, None, None, None
+    feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
 
     # color_feat, thermal_feat = torch.split(feat, cameras.shape[0] // 2)
     # color_cam_feat, thermal_cam_feat= torch.split(camera_feat, cameras.shape[0] // 2)
 
     # loss_reconst = reconst_loss(xAdapt, xRGB)
-    loss_ID = criterion_id(out0_Z, labels_Z)
+    loss_ID = criterion_id(out0_Z, idRGB)
 
-    loss_camID = criterion_id(camera_out0_Z, cameras_Z - 1)
-    loss_color2gray = reconst_loss(featRGB.detach(), feat_Z)
+    loss_camID = criterion_id(camera_out0_Z, cameras_Ir - 1) / 5
+    loss_color2gray = reconst_loss(featRGB, feat_Z)
 
-    loss_thermal2gray = reconst_loss(camera_Ir.detach(), camera_feat_Z)
-
+    loss_thermal2gray = reconst_loss(camera_feat_Ir, camera_feat_Z)
+    trainDisc_ID(epoch, xRGB, xIR, xZ, disc_loss)
+    valid = torch.ones(xRGB.size(0), 1).cuda()
+    loss_disc = F.binary_cross_entropy(net.discriminate(xZ), valid)
     # normilizeLoss = (1 - xAdapt.sum(dim=1)).pow(2).mean() * 10
 
-    loss = loss_ID + loss_camID + loss_color2gray + loss_thermal2gray #+ normilizeLoss
+    loss = loss_ID + loss_camID + loss_color2gray + loss_thermal2gray + loss_disc #+ normilizeLoss
     # loss = loss_reconst + loss_ID + loss_color2gray + loss_camID
-    gray_loss.update(loss.item(), cameras_Z.size(0))
-
+    gray_loss.update(loss.item(), cameras_Ir.size(0))
+    # trainDisc_ID(epoch, xRGB,xIR, xZ, disc_loss)
     # adaptor_optimizer.zero_grad()
     # loss.backward()
     # adaptor_optimizer.step()
-    return loss
+    return loss, camera_out0_Z, out0_Z
 
-train_only_ReID = True
-train_only_generator = False
+def trainDisc_ID(epoch, xRGB, xIR, xZ, disc_loss):
+    valid = torch.ones(xRGB.size(0), 1).cuda()
+    fake = torch.zeros(xZ.size(0), 1).cuda()
+
+    x = torch.cat((xRGB, xZ.detach().clone()), dim=0)
+    l = torch.cat((valid, fake), dim=0)
+
+    loss = F.binary_cross_entropy(net.discriminate(x), l)
+    disc_optimizer.zero_grad()
+    loss.backward()
+    disc_optimizer.step()
+
+
+train_only_ReID = False
+train_only_generator = True
 use_pre_feature = False
 
 if train_only_generator:
@@ -420,6 +440,7 @@ def train(epoch):
     tri_loss = AverageMeter()
     gray_loss = AverageMeter()
     camera_loss = AverageMeter()
+    disc_loss = AverageMeter()
     # part_loss = AverageMeter()
     data_time = AverageMeter()
     batch_time = AverageMeter()
@@ -483,15 +504,15 @@ def train(epoch):
         #correct += (batch_acc / 2)
         loss = 0
         if train_only_ReID is False:
-            xZ, xAdapt = net.generate(epoch, xRGB=input1, content=featRGBX4, style=camera_Ir, xIR=input2)
-            # feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = None, None, None, None
-            feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
-            loss = loss + 0.2 * (trainGen_ID(epoch, featRGB, feat_Z, out0_Z, label1, camera_Ir, camera_feat_Z, camera_out0_Z,
-                        cam2, gray_loss, xAdapt, input1))
+            gen_loss, camera_out0_Z, out0_Z  = trainGen_ID(epoch, input1, input2, featRGB, featRGBX4, label1, label2,
+                                   camera_RGB, camera_Ir, cam1, cam2, gray_loss, disc_loss)
+            loss = loss + 0.2 * (gen_loss)
             _, predicted = camera_out0_Z.max(1)
             correct += (predicted.eq(cam1 - 1).sum().item() / 2)
             _, predicted = out0_Z.max(1)
             correct += (predicted.eq(label1).sum().item() / 2)
+
+
 
         if train_only_generator is False:
             _, predicted = out0.max(1)
@@ -500,9 +521,9 @@ def train(epoch):
             loss += trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss)
 
         optimizer.zero_grad()
-        # adaptor_optimizer.zero_grad()
+        adaptor_optimizer.zero_grad()
         loss.backward()
-        # adaptor_optimizer.step()
+        adaptor_optimizer.step()
         optimizer.step()
 
         # part_loss.update(partsMap['loss_body_cont'].item(), 2 * input1.size(0))
@@ -514,17 +535,17 @@ def train(epoch):
         if batch_idx % 50 == 0:
             print('Epoch: [{}][{}/{}] '
                   'T: {now} ({batch_time.avg:.3f}) '
-                  'lr:{:.3f} '
                   'L: {train_loss.val:.4f} ({train_loss.avg:.4f}) '
                   'i: {id_loss.val:.4f} ({id_loss.avg:.4f}) '
                   'T: {tri_loss.val:.4f} ({tri_loss.avg:.4f}) '
                   'G: {gray_loss.val:.4f} ({gray_loss.avg:.4f}) '
                   'M: {camID_loss.val:.4f} ({camID_loss.avg:.4f}) '
+                  'D: {disc_loss.val:.4f} ({disc_loss.avg:.4f}) '
                   'Accu: {:.2f}'.format(
-                epoch, batch_idx, len(trainloader), current_lr,
+                epoch, batch_idx, len(trainloader),
                 100. * correct / total, now=time_now(), batch_time=batch_time,
                 train_loss=train_loss, id_loss=id_loss, tri_loss=tri_loss, gray_loss=gray_loss,
-                camID_loss=camera_loss))
+                camID_loss=camera_loss, disc_loss=disc_loss))
             sys.stdout.flush()
 
     writer.add_scalar('total_loss', train_loss.avg, epoch)
@@ -655,7 +676,7 @@ for epoch in range(start_epoch, 121):
                                   sampler=sampler, num_workers=args.workers, drop_last=True)
 
     # training
-
+    torch.autograd.set_detect_anomaly(True)
     train(epoch)
     if epoch >= 0 and epoch % 4 == 0:
         print('Test Epoch: {}'.format(epoch))

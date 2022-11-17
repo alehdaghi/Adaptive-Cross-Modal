@@ -43,6 +43,8 @@ class ModelAdaptive(nn.Module):
         self.camera_id = Camera_net(camera_num, arch)
         self.adaptor = Decoder(output_dim=3)
         self.mlp = MLP(self.camera_id.pool_dim, get_num_adain_params(self.adaptor), 128, 1, norm='none', activ='relu')
+        self.discriminator = Discriminator()
+
 
     def forward(self, xRGB, xIR, modal=0, with_feature=False, with_camID=False, epoch=0, ):
 
@@ -115,6 +117,9 @@ class ModelAdaptive(nn.Module):
 
         return xZ, xAdapt
 
+    def discriminate(self, x):
+        return self.discriminator(x)
+
     def setGrad(self, module, grad):
         for param in module.parameters():
             param.requires_grad = grad
@@ -135,6 +140,8 @@ class ModelAdaptive(nn.Module):
 
         # self.setGrad(self.person_id.bottleneck, True)
         # self.setGrad(self.person_id.classifier, True)
+
+
 
     def getPoolDim(self):
         return self.camera_id.pool_dim
@@ -190,11 +197,14 @@ class Discriminator(nn.Module):
         resnet = torchvision.models.resnet18(weights='ResNet18_Weights.DEFAULT')
         self.model = torch.nn.Sequential(resnet.conv1, resnet.bn1, nn.ReLU(inplace=True), resnet.maxpool,
                                          resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4)
-        self.discriminator = nn.Linear(512, 2, bias=True)
+        self.discriminator = nn.Linear(512, 1)
+        self.activation = nn.Sigmoid()
 
     def forward(self, x):
         feat = self.model(x)
-        return self.discriminator(feat)
+        feat = embed_net.gl_pool(feat, 'off')
+        d = self.discriminator(feat)
+        return self.activation(d)
 
 
 class embed_net(nn.Module):
