@@ -262,25 +262,26 @@ reconst_loss.to(device)
 criterion_contrastive = SupConLoss()
 
 if args.optim == 'sgd':
-    ignored_params = list(map(id, net.person_id.bottleneck.parameters())) \
-                    + list(map(id, net.person_id.classifier.parameters())) \
-                    + list(map(id, net.person_id.z_module.parameters()))
-
-    ids = set(map(id, net.person_id.parameters()))
-    params = filter(lambda p: id(p) in ids, net.person_id.parameters())
-    base_params = filter(lambda p: id(p) not in ignored_params, params)
+    # ignored_params = list(map(id, net.person_id.bottleneck.parameters())) \
+    #                 + list(map(id, net.person_id.classifier.parameters())) \
+    #                 + list(map(id, net.person_id.z_module.parameters()))
+    #
+    # ids = set(map(id, net.person_id.parameters()))
+    # params = filter(lambda p: id(p) in ids, net.person_id.parameters())
+    # base_params = filter(lambda p: id(p) not in ignored_params, params)
 
     gen_params = list(net.adaptor.parameters()) + list(net.mlp.parameters()) \
                  #+ list(net.person_id.z_module.parameters()) + list(net.camera_id.parameters())
 
-    optimizer = optim.SGD([
-        {'params': base_params, 'lr': 0.1 * args.lr},
-        {'params': net.camera_id.parameters(), 'lr': 0.1 * args.lr},
-        {'params': net.person_id.bottleneck.parameters(), 'lr': args.lr},
-        {'params': net.person_id.classifier.parameters(), 'lr': args.lr},
-        # {'params': gen_params, 'lr': args.lr}
-        ],
-        weight_decay=5e-4, momentum=0.9, nesterov=True)
+    reid_params = list(net.person_id.parameters()) + list(net.camera_id.parameters())
+    # optimizer = optim.SGD([
+    #     {'params': base_params, 'lr': 0.1 * args.lr},
+    #     {'params': net.camera_id.parameters(), 'lr': 0.1 * args.lr},
+    #     {'params': net.person_id.bottleneck.parameters(), 'lr': args.lr},
+    #     {'params': net.person_id.classifier.parameters(), 'lr': args.lr},
+    #     # {'params': gen_params, 'lr': args.lr}
+    #     ],
+    #     weight_decay=5e-4, momentum=0.9, nesterov=True)
 
     # adaptor_optimizer = optim.SGD([
     #     {'params': net.camera_id.parameters(), 'lr': 0.1 * args.lr},
@@ -288,7 +289,7 @@ if args.optim == 'sgd':
     #     # {'params': gen_params, 'lr': args.lr}
     # ],
     #     weight_decay=5e-4, momentum=0.9, nesterov=True)
-
+    optimizer = optim.Adam(reid_params, lr=0.0001, betas=(0.5, 0.999), weight_decay=0.0001)
     adaptor_optimizer = optim.Adam(gen_params, lr=0.0001, betas=(0.5, 0.999), weight_decay=0.0001)
 
 # exp_lr_scheduler = lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
@@ -337,9 +338,11 @@ def trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss):
     # loss_color2gray = 30 * reconst_loss(color_feat.detach(), gray_feat)
     # loss_thermal2gray = 30 * reconst_loss(thermal_cam_feat.detach().clone(), gray_cam_feat)
 
+    #loss_tri, _ = hctriplet(camera_feat, cameras - 1)
     loss_camID = criterion_id(camera_out0, cameras - 1)
 
-    loss = loss_camID #+ loss_color2gray + loss_thermal2gray
+
+    loss = loss_camID #+ loss_tri#+ loss_color2gray + loss_thermal2gray
 
     camera_loss.update(loss.item(), cameras.size(0))
 
@@ -356,7 +359,7 @@ def trainGen_ID(epoch, featRGB, feat_Z, out0_Z, labels_Z, camera_Ir, camera_feat
     # color_cam_feat, thermal_cam_feat= torch.split(camera_feat, cameras.shape[0] // 2)
 
     # loss_reconst = reconst_loss(xAdapt, xRGB)
-    loss_ID = 2 * criterion_id(out0_Z, labels_Z)
+    loss_ID = criterion_id(out0_Z, labels_Z)
 
     loss_camID = criterion_id(camera_out0_Z, cameras_Z - 1)
     loss_color2gray = reconst_loss(featRGB.detach(), feat_Z)
@@ -374,6 +377,7 @@ def trainGen_ID(epoch, featRGB, feat_Z, out0_Z, labels_Z, camera_Ir, camera_feat
     # adaptor_optimizer.step()
     return loss
 
+train_only_ReID = False
 train_only_generator = False
 use_pre_feature = False
 
@@ -474,16 +478,17 @@ def train(epoch):
             camera_RGB, camera_Ir = camera_feat.split(bs)
 
         #correct += (batch_acc / 2)
-
-        xZ, xAdapt = net.generate(epoch, xRGB=input1, content=featRGBX4, style=camera_RGB, xIR=input2)
-        # feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = None, None, None, None
-        feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
-        loss = trainGen_ID(epoch, featRGB, feat_Z, out0_Z, label1, camera_Ir, camera_feat_Z, camera_out0_Z,
-                    cam2, gray_loss, xAdapt, input1)
-        _, predicted = camera_out0_Z.max(1)
-        correct += (predicted.eq(cam1 - 1).sum().item() / 2)
-        _, predicted = out0_Z.max(1)
-        correct += (predicted.eq(label1).sum().item() / 2)
+        loss = 0
+        if train_only_ReID is False:
+            xZ, xAdapt = net.generate(epoch, xRGB=input1, content=featRGBX4, style=camera_Ir, xIR=input2)
+            # feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = None, None, None, None
+            feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
+            loss = loss + 0.2 * (trainGen_ID(epoch, featRGB, feat_Z, out0_Z, label1, camera_Ir, camera_feat_Z, camera_out0_Z,
+                        cam2, gray_loss, xAdapt, input1))
+            _, predicted = camera_out0_Z.max(1)
+            correct += (predicted.eq(cam1 - 1).sum().item() / 2)
+            _, predicted = out0_Z.max(1)
+            correct += (predicted.eq(label1).sum().item() / 2)
 
         if train_only_generator is False:
             _, predicted = out0.max(1)

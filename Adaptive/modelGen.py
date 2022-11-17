@@ -102,7 +102,7 @@ class ModelAdaptive(nn.Module):
         xAdapt = self.adaptor(content, transfer_style)  # + (1-alpha) * torch.rand(b, 3, 1, 1).cuda()
 
 
-        xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5).detach()
+        xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5)
         xZ = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
         # xZ = xAdapt.mean(dim=1, keepdim=True).expand(-1, 3, -1, -1)
 
