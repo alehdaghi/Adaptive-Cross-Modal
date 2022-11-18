@@ -490,7 +490,7 @@ def checkResult(epoch):
 
 # training
 print('==> Start Training...')
-for epoch in range(start_epoch, 120):
+for epoch in range(start_epoch, 121):
 
     print('==> Preparing Data Loader...')
     # identity sampler

@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 #from testRegDB import RegDBData
 from data_loader import SYSUData
-from model import *
+from Adaptive.modelGen import ModelAdaptive as model
 import torchvision.transforms as transforms
 import numpy as np
 from sklearn.datasets import load_digits
@@ -21,6 +21,7 @@ import pandas as pd
 from data_loader import SYSUData, RegDBData, TestData
 from data_manager import *
 from PIL import Image
+import umap.umap_ as umap
 
 
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -38,6 +39,10 @@ transform_test = transforms.Compose([
     transforms.ToTensor(),
     normalize,
 ])
+
+invTrans = transforms.Compose([ transforms.Normalize(mean = [ 0., 0., 0. ], std = [ 1/0.229, 1/0.224, 1/0.225 ]),
+                                transforms.Normalize(mean = [ -0.485, -0.456, -0.406 ],std = [ 1., 1., 1. ]),
+                               ])
 
 sns.set(rc={'figure.figsize':(11.7,8.27)})
 
@@ -138,22 +143,32 @@ def _gradient_descent(obj_func, p0, args, it=0, n_iter=1000,
 L = 10
 data_path = '../Datasets/SYSU-MM01/'
 n_class = 395
-query_img, query_label, query_cam = process_query_sysu(data_path,
-                                                      file_path='exp/train_id.txt')
-gall_img, gall_label, gall_cam = process_gallery_sysu(data_path, trial=0, single_shot=False,
-                                                      file_path='exp/train_id.txt')
+query_img, query_label, query_cam = process_query_sysu(data_path, file_path='exp/test_id.txt')
+gall_img, gall_label, gall_cam = process_gallery_sysu(data_path, trial=0, single_shot=False, file_path='exp/test_id.txt')
+
+# data_path = '../Datasets/RegDB/'
+# n_class = 206
+
+# query_img, query_label, query_cam = process_test_regdb(data_path, modal='thermal')
+# gall_img, gall_label, gall_cam = process_test_regdb(data_path,  modal='visible')
+
+
 nquery = len(query_label)
 ngall = len(gall_label)
 img_size = (144,288)
 
 def extractFeat(imgs, labels, cams, TEST_TYPE ):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    n_class = 296
-    net = embed_net(n_class, no_local='off', gm_pool='off', arch='resnet50')
-    resume = './save_model/sysu_base_p4_n10_lr_0.1_seed_0_gray_epoch_80.t'
-    #resume = 'save_model/sysu_base_p6_n8_lr_0.1_seed_2_epoch_80.t'
+    n_class = 395
+    net = model(n_class, no_local='on', gm_pool='on', arch='resnet50')
+    # resume = './test-aug/sysu_att_p8_n4_lr_0.03_seed_0_gray_randChanU2_best.t' # rand+aug
+    # resume = 'save_model/sysu_att_p8_n4_lr_0.1_seed_0_gray_no_Aug_gray_best.t' # gray
+    # resume = 'save_model/sysu_att_p8_n8_lr_0.1_seed_0_base_best.t' # base
+    #resume = "save_model/sysu_att_adapt_p8_n4_lr_0.1_seed_0_gray_adaptRGB2_best.t"
+    resume = "save_model/sysu_att_adapt_p8_n4_lr_0.1_seed_0_adaptNonLinear2_best.t"
+    # resume = 'not.t' # not
     pool_dim = net.getPoolDim()
-    #resume = './save_model/sysu_base_p4_n8_lr_0.1_seed_0_first.t'
+    # resume = './save_model/sysu_base_p4_n8_lr_0.1_seed_0_first.t'
     checkpoint = torch.load(resume)
     net.to(device)
     net.load_state_dict(checkpoint['net'])
@@ -164,13 +179,15 @@ def extractFeat(imgs, labels, cams, TEST_TYPE ):
         XX = np.empty((0, pool_dim))
         YY = np.empty(0, np.int)
         CC = np.empty(0, np.int)
+        CCs = np.empty(0, np.int)
 
         m = {i: [] for i in np.unique(labels)}
         for i, y in enumerate(labels):
             m[y] = np.append(m[y], int(i))
         #Ls = np.random.choice(data.getLabels(), L)
-        Ls = np.unique(labels)[0:L]
+        Ls = np.unique(labels)#[50:50+L]
         for i in Ls:
+            print ("l: " + str(i))
             X = torch.Tensor()
             for j in m[i]:
                 j = int(j)
@@ -188,17 +205,18 @@ def extractFeat(imgs, labels, cams, TEST_TYPE ):
                 YY = np.append(YY, [int(y1)], axis=0)
                 CC = np.append(CC, [int(c1)], axis=0)
 
-
             X = Variable(X.cuda())
 
             #x1 = x1.unsqueeze(0)
             #x2 = x2.unsqueeze(0)
-            i = 0
-            while i < len(X):
-                j = min(i+20, len(X))
-                res = net(X[i:j], X[i:j], x3 = X[i:j], modal=TEST_TYPE)
-                XX = np.append(XX, res[0].cpu().numpy() , axis=0)
-                i = j
+            ii = 0
+            print ("f: " + str(i))
+            while ii < len(X):
+                j = min(ii+20, len(X))
+                feat_pool, feat_fc, camID = net(X[ii:j], X[ii:j], modal=TEST_TYPE, with_feature=True, with_camID=True)
+                XX = np.append(XX, feat_fc.cpu().numpy() , axis=0)
+                ii = j
+                CCs = np.append(CCs, camID.max(axis=1)[1].cpu().numpy())
 
     return XX, YY, CC
 
@@ -206,23 +224,39 @@ def extractFeat(imgs, labels, cams, TEST_TYPE ):
 
 
 USE_NET = True
-USE_OTHER = True
+USE_OTHER = False
 if USE_NET:
-    XQ, yQ, cQ = extractFeat(query_img, query_label, query_cam, 2)
-    #XQ, yQ, cQ = extractFeat(gall_img, gall_label, gall_cam, 1)
-    XG, yG, cG = extractFeat(gall_img, gall_label, gall_cam, 1)
-    X = np.append(XQ, XG, axis=0)
-    y = np.append(yQ, yG, axis=0)
-    c = np.append(cQ, cG, axis=0)
-    X_embedded = fit(X)
-    np.save('X.npy', X_embedded)
+
+
+    XC, yC, cC = extractFeat(gall_img, gall_label, gall_cam, 1)
+    XI, yI, cI = extractFeat(query_img, query_label, query_cam, 2)
+    XG, yG, cG = extractFeat(gall_img, gall_label, gall_cam, 3)
+
+
+    X = np.append(XI, XC, axis=0)
+    y = np.append(yI, yC, axis=0)
+    c = np.append(cI, cC, axis=0)
+
+    # X = np.append(X, XG, axis=0)
+    # y = np.append(y, yG, axis=0)
+    # c = np.append(c, cG, axis=0)
+
+    np.save('F.npy', X)
     np.save('y.npy', y)
     np.save('c.npy', c)
-    i1 = np.unique(yQ, return_counts=True)[1]
-    i2 = np.unique(yG, return_counts=True)[1]
+    exit(0)
+    # X_embedded = fit(X)
+    reducer = umap.UMAP(random_state=42, metric='cosine', n_neighbors=120, min_dist=0.4)
+    reducer.fit(X)
+    X_embedded = reducer.transform(X)
 
-    f1 = np.split(XQ, np.cumsum(i1[:-1]))
-    f2 = np.split(XG, np.cumsum(i2[:-1]))
+    np.save('X.npy', X_embedded)
+
+    i1 = np.unique(yI, return_counts=True)[1]
+    i2 = np.unique(yC, return_counts=True)[1]
+
+    f1 = np.split(XI, np.cumsum(i1[:-1]))
+    f2 = np.split(XC, np.cumsum(i2[:-1]))
     c1 = np.asarray([np.mean(f, axis=0) for f in f1])
     c2 = np.asarray([np.mean(f, axis=0) for f in f2])
 
@@ -248,12 +282,19 @@ df = pd.DataFrame(columns=['x','y','id','cR', 'cI'])
 df['x'] = X_embedded[:,0]
 df['y'] = X_embedded[:,1]
 df['id'] = y
-df['c'] = c
+df['camera'] = c
+
+font = {'family' : 'normal',
+        'weight' : 'bold',
+        'size'   : 22}
+plt.rc('font', **font)
+fig, ax = plt.subplots(figsize=[20,20])
 
 sns.set_theme()
 p = sns.hls_palette(L, h=.5)
-plt.title("Visualize features of "+str(L) +" identity (Resnet50, Part-Att)" )
+plt.title("Visualize features of "+str(L) +" identity" )
 palette = ['green', 'orange', 'gray', 'brown', 'dodgerblue', 'black']
-g=sns.scatterplot(data=df, x='x', y='y', style= 'id', hue='c', palette=palette)
+# palette = ['green', 'gray', 'black']
+g=sns.scatterplot(data=df, x='x', y='y', style= 'id', hue='camera', palette=palette, ax =ax, s=[100]*len(c))
 plt.legend(bbox_to_anchor=(1.01, 1),borderaxespad=0)
 plt.show()

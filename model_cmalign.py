@@ -4,6 +4,7 @@ from torch.nn import init
 from resnet import resnet50, resnet18
 import torchvision
 import copy
+import torch.nn.functional as F
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -164,11 +165,18 @@ class base_resnet(nn.Module):
 
         resnet.layer4[0].downsample[0].stride = (1, 1)
 
+
         self.resnet_part2 = nn.Sequential(resnet.layer2, resnet.layer3, resnet.layer4)
 
-    def forward(self, x):
-        x = self.resnet_part2(x)
-        return x
+
+    def forward(self, x, isReturnX3=False):
+        resnet_layer2, resnet_layer3, resnet_layer4 = self.resnet_part2
+        x2 = resnet_layer2(x)
+        x3 = resnet_layer3(x2)
+        x4 = resnet_layer4(x3)
+        if isReturnX3:
+            return x4, x3
+        return x4
 
     def count_params(self):
         s = count_parameters(self.resnet_part2)
@@ -275,15 +283,14 @@ class embed_net(nn.Module):
                     x = self.NL_4[NL4_counter](x)
                     NL4_counter += 1
         else:
-            x = self.base_resnet(x)
+            x, xlayer3 = self.base_resnet(x, True)
         if self.gm_pool  == 'on':
             b, c, h, w = x.shape
             x = x.view(b, c, -1)
             p = 3.0
             x_pool = (torch.mean(x**p, dim=-1) + 1e-12)**(1/p)
         else:
-            x_pool = self.avgpool(x)
-            x_pool = x_pool.view(x_pool.size(0), x_pool.size(1))
+            x_pool = self.g_avg(x)
 
         feat = self.bottleneck(x_pool)
         cmalign_ret = None
@@ -294,8 +301,8 @@ class embed_net(nn.Module):
             else:
                 out4 = self.cmalign(x[:x1.shape[0]], x[x1.shape[0]:], feat)
             feat4_recon = out4['feat']
-            feat4_recon_p = self.avgpool(feat4_recon)
-            feat4_recon_p = feat4_recon_p.view(feat4_recon_p.size(0), feat4_recon_p.size(1))
+            feat4_recon_p = self.g_avg(feat4_recon)
+
             cls_ic_layer4 = self.classifier(self.bottleneck(feat4_recon_p))
 
             ### compute losses
@@ -323,6 +330,14 @@ class embed_net(nn.Module):
             return retX_pool, retFeat, cmalign_ret
         else:
             return retX_pool, retFeat
+
+    def g_avg(self, x):
+        x_pool = F.adaptive_avg_pool2d(x,1)
+        return x_pool.view(x_pool.size(0), x_pool.size(1))
+
+    def g_max(self, x):
+        x_pool = F.adaptive_max_pool2d(x,1)
+        return x_pool.view(x_pool.size(0), x_pool.size(1))
 
     def getPoolDim(self):
         return self.pool_dim

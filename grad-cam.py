@@ -1,5 +1,5 @@
 import os,sys
-from model import embed_net as Model
+from modelAdapt import embed_net as Model
 import torch
 from torch.autograd import Variable
 import numpy as np
@@ -59,12 +59,12 @@ class Explanation_generator:
             Since the models of two streams are the same in this case,
             you may simplify the code for your project.
         '''
-        model_1 = Model(class_num=296, no_local= 'off', gm_pool =  'off') # dim equals to pid number
-        model_2 = Model(class_num=296, no_local= 'off', gm_pool =  'off')
+        model_1 = Model(class_num=395, no_local= 'on', gm_pool =  'on') # dim equals to pid number
+        model_2 = Model(class_num=395, no_local= 'on', gm_pool =  'on')
 
 
         # path to load the pretrained model
-        resume = './save_model/sysu_base_p4_n10_lr_0.1_seed_0_gray_epoch_80.t'
+        resume = './save_model/sysu_att_adapt_p8_n4_lr_0.1_seed_0_gray_adaptRGB3_best.t'
         #resume = './save_model/sysu_base_p4_n8_lr_0.1_seed_0_first.t'
         checkpoint = torch.load(resume)
 
@@ -72,15 +72,15 @@ class Explanation_generator:
         # resume model
         print('load model from {}'.format(resume))
 
-        model_1.load_state_dict(weight)
-        model_2.load_state_dict(weight)
+        model_1.load_state_dict(weight, strict=False)
+        model_2.load_state_dict(weight, strict=False)
 
         model_1 = model_1.eval().cuda()
         model_2 = model_2.eval().cuda()
 
-        embed_1, _1, map_1 = model_1(inputs_1, inputs_2,
+        embed_1, _1, map_1, _, camera_map_1 = model_1(inputs_1, inputs_2,
                                      modal=test_mode1, with_feature=True)
-        embed_2, _2, map_2 = model_2(inputs_2, inputs_2,
+        embed_2, _2, map_2, _, camera_map_2 = model_2(inputs_2, inputs_2,
                                      modal=test_mode2, with_feature=True)
 
         fc_1 = None#model_1.module.classifier.classifier.cpu()
@@ -97,6 +97,11 @@ class Explanation_generator:
         '''
         heatmap = np.array(cv2.applyColorMap(np.uint8(255*(1.-raw)), cv2.COLORMAP_JET))
         return heatmap
+
+    def maxCAM(self, map, size = (img_w, img_h)):
+        mask = Model.compute_mask(map).cpu().numpy()
+        cam = cv2.resize(mask.squeeze(), (size[1], size[0]))
+        return cam
 
     def GradCAM(self, map, size = (img_w, img_h)):
         gradient = map.grad.cpu().numpy()
@@ -202,8 +207,8 @@ class Explanation_generator:
                          decom_padding[x_max, y_max]*dx*dy
         return np.maximum(interplolation,0)
 
-    def demo(self, path_1='../Datasets/SYSU-MM01/cam1/0070/0011.jpg', \
-                   path_2='../Datasets/SYSU-MM01/cam6/0070/0011.jpg', \
+    def demo(self, path_1='../Datasets/SYSU-MM01/cam1/0095/0011.jpg', \
+                   path_2='../Datasets/SYSU-MM01/cam6/0095/0011.jpg', \
                    size = (img_w, img_h)):
         '''
             generate activation map with different methods.
@@ -229,8 +234,13 @@ class Explanation_generator:
         product.backward(torch.tensor(1.).cuda(), retain_graph=True)
         size1 = (image_1.shape[0], image_1.shape[1])
         size2 = (image_2.shape[0], image_2.shape[1])
-        gradcam_1 = self.GradCAM(map_1, size=(image_1.shape[0], image_1.shape[1]))
-        gradcam_2 = self.GradCAM(map_2, size=(image_2.shape[0], image_2.shape[1]))
+
+
+        # gradcam_1 = self.GradCAM(map_1, size=(image_1.shape[0], image_1.shape[1]))
+        # gradcam_2 = self.GradCAM(map_2, size=(image_2.shape[0], image_2.shape[1]))
+
+        gradcam_1 = self.maxCAM(map_1, size=(image_1.shape[0], image_1.shape[1]))
+        gradcam_2 = self.maxCAM(map_2, size=(image_2.shape[0], image_2.shape[1]))
 
         image_overlay_1 = image_1 * 0.7 + self.imshow_convert(gradcam_1) / 255.0 * 0.3
         image_overlay_2 = image_2 * 0.7 + self.imshow_convert(gradcam_2) / 255.0 * 0.3
@@ -245,7 +255,7 @@ class Explanation_generator:
         plt.imshow(image_overlay_1)
         plt.subplot(2,2,4)
         plt.imshow(image_overlay_2)
-
+        return
         #--------------------------------------------------------------------------------
         '''
             Generate overall activation map using activation decomposition ("Decomposition"),
