@@ -369,7 +369,7 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
     # loss_reconst = reconst_loss(xAdapt, xRGB)
     loss_ID = criterion_id(out0_Z, idRGB)
 
-    loss_camID = criterion_id(camera_out0_Z, cameras_Ir - 1) / 5
+    loss_camID = criterion_id(camera_out0_Z, cameras_Ir - 1)
     loss_color2gray = reconst_loss(featRGB, feat_Z)
 
     loss_thermal2gray = reconst_loss(camera_feat_Ir, camera_feat_Z)
@@ -385,7 +385,7 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
     # adaptor_optimizer.zero_grad()
     # loss.backward()
     # adaptor_optimizer.step()
-    return loss, camera_out0_Z, out0_Z
+    return loss, camera_out0_Z, out0_Z, feat_Z
 
 def trainDisc_ID(epoch, xRGB, xIR, xZ, disc_loss):
     valid = torch.ones(xRGB.size(0), 1).cuda()
@@ -505,13 +505,16 @@ def train(epoch):
         #correct += (batch_acc / 2)
         loss = 0
         if train_only_ReID is False:
-            gen_loss, camera_out0_Z, out0_Z  = trainGen_ID(epoch, input1, input2, featRGB, featRGBX4, label1, label2,
+            gen_loss, camera_out0_Z, out0_Z, feat_Z  = trainGen_ID(epoch, input1, input2, featRGB, featRGBX4, label1, label2,
                                    camera_RGB, camera_Ir, cam1, cam2, gray_loss, disc_loss)
-            loss = loss + 0.2 * (gen_loss)
+            loss = loss + 0.5 * (gen_loss)
             _, predicted = camera_out0_Z.max(1)
-            correct += (predicted.eq(cam1 - 1).sum().item() / 2)
+            correct += (predicted.eq(cam2 - 1).sum().item() / 2)
             _, predicted = out0_Z.max(1)
             correct += (predicted.eq(label1).sum().item() / 2)
+            feat = torch.cat((feat, feat_Z), dim=0)
+            labels = torch.cat((labels, label1), dim=0)
+            out0 = torch.cat((out0, out0_Z), dim=0)
 
 
 
