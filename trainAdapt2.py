@@ -388,14 +388,16 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
     return loss, camera_out0_Z, out0_Z, feat_Z
 
 def trainDisc_ID(epoch, xRGB, xIR, xZ, disc_loss):
-    valid = torch.ones(xRGB.size(0), 1).cuda()
+    valid = torch.ones(xRGB.size(0)+xIR.size(0), 1).cuda()
+    # valid = torch.ones(xIR.size(0), 1).cuda()
+
     fake = torch.zeros(xZ.size(0), 1).cuda()
 
-    x = torch.cat((xRGB, xZ.detach().clone()), dim=0)
+    x = torch.cat((xRGB, xIR, xZ.detach().clone()), dim=0)
     l = torch.cat((valid, fake), dim=0)
 
     loss = F.binary_cross_entropy(net.discriminate(x), l)
-    disc_loss.update(loss.item(), xRGB.size(0))
+    disc_loss.update(loss.item(), l.size(0))
     disc_optimizer.zero_grad()
     loss.backward()
     disc_optimizer.step()
