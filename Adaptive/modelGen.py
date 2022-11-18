@@ -194,7 +194,7 @@ class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
         # self.encoder = base_resnet(arch=arch).resnet_part2[2]  # layer4
-        resnet = torchvision.models.resnet18(weights='ResNet18_Weights.DEFAULT')
+        resnet = torchvision.models.resnet18(pretrained=True)
         self.model = torch.nn.Sequential(resnet.conv1, resnet.bn1, nn.ReLU(inplace=True), resnet.maxpool,
                                          resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4)
         self.discriminator = nn.Linear(512, 1)

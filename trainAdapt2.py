@@ -273,14 +273,14 @@ if args.optim == 'sgd':
 
 
 
-    optimizer = optim.SGD([
-        {'params': base_params, 'lr': 0.1 * args.lr},
-        {'params': net.camera_id.parameters(), 'lr': 0.1 * args.lr},
-        {'params': net.person_id.bottleneck.parameters(), 'lr': args.lr},
-        {'params': net.person_id.classifier.parameters(), 'lr': args.lr},
-        # {'params': gen_params, 'lr': args.lr}
-        ],
-        weight_decay=5e-4, momentum=0.9, nesterov=True)
+    # optimizer = optim.SGD([
+    #     {'params': base_params, 'lr': 0.1 * args.lr},
+    #     {'params': net.camera_id.parameters(), 'lr': 0.1 * args.lr},
+    #     {'params': net.person_id.bottleneck.parameters(), 'lr': args.lr},
+    #     {'params': net.person_id.classifier.parameters(), 'lr': args.lr},
+    #     # {'params': gen_params, 'lr': args.lr}
+    #     ],
+    #     weight_decay=5e-4, momentum=0.9, nesterov=True)
 
     # adaptor_optimizer = optim.SGD([
     #     {'params': net.camera_id.parameters(), 'lr': 0.1 * args.lr},
@@ -288,8 +288,8 @@ if args.optim == 'sgd':
     #     # {'params': gen_params, 'lr': args.lr}
     # ],
     #     weight_decay=5e-4, momentum=0.9, nesterov=True)
-    #reid_params = list(net.person_id.parameters()) + list(net.camera_id.parameters())
-    # optimizer = optim.Adam(reid_params, lr=0.0001, betas=(0.5, 0.999), weight_decay=0.0001)
+    reid_params = list(net.person_id.parameters()) + list(net.camera_id.parameters())
+    optimizer = optim.Adam(reid_params, lr=0.0003, betas=(0.5, 0.999), weight_decay=0.0001)
 
     gen_params = list(net.adaptor.parameters()) + list(net.mlp.parameters()) \
         # + list(net.person_id.z_module.parameters()) + list(net.camera_id.parameters())
@@ -395,6 +395,7 @@ def trainDisc_ID(epoch, xRGB, xIR, xZ, disc_loss):
     l = torch.cat((valid, fake), dim=0)
 
     loss = F.binary_cross_entropy(net.discriminate(x), l)
+    disc_loss.update(loss.item(), xRGB.size(0))
     disc_optimizer.zero_grad()
     loss.backward()
     disc_optimizer.step()
