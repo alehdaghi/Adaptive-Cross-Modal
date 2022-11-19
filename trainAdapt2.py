@@ -289,12 +289,12 @@ if args.optim == 'sgd':
     # ],
     #     weight_decay=5e-4, momentum=0.9, nesterov=True)
     reid_params = list(net.person_id.parameters()) + list(net.camera_id.parameters())
-    optimizer = optim.Adam(reid_params, lr=0.0003, betas=(0.5, 0.999), weight_decay=0.0001)
+    optimizer = optim.Adam(reid_params, lr=0.001, betas=(0.9, 0.999), weight_decay=0.0001)
 
     gen_params = list(net.adaptor.parameters()) + list(net.mlp.parameters()) \
         # + list(net.person_id.z_module.parameters()) + list(net.camera_id.parameters())
-    adaptor_optimizer = optim.Adam(gen_params, lr=0.0001, betas=(0.5, 0.999), weight_decay=0.0001)
-    disc_optimizer = optim.Adam(net.discriminator.parameters(), lr=0.0001, betas=(0.5, 0.999), weight_decay=0.0001)
+    adaptor_optimizer = optim.Adam(gen_params, lr=0.0005, betas=(0.7, 0.999), weight_decay=0.0001)
+    disc_optimizer = optim.Adam(net.discriminator.parameters(), lr=0.0005, betas=(0.7, 0.999), weight_decay=0.0001)
 
 # exp_lr_scheduler = lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 def adjust_learning_rate(optimizer, epoch):
@@ -403,7 +403,7 @@ def trainDisc_ID(epoch, xRGB, xIR, xZ, disc_loss):
     disc_optimizer.step()
 
 
-train_only_ReID = False
+train_only_ReID = True
 train_only_generator = False
 use_pre_feature = False
 
@@ -455,12 +455,23 @@ def train(epoch):
     end = time.time()
 
 
-    if train_only_generator:
-        net.freeze_person()
+
 
 
 
     for batch_idx, (input1, input2, input3, label1, label2, _, cam1, cam2, c_index, t_index) in enumerate(trainloader):
+
+        # if batch_idx % 2 ==0:
+        #     train_only_generator = True
+        #     train_only_ReID = False
+        # else:
+        #     train_only_generator = False
+        #     train_only_ReID = True
+
+        if train_only_generator:
+            net.freeze_person()
+        else:
+            net.unFreeze_person()
 
         bs = label1.shape[0]
         input1 = Variable(input1.cuda())
