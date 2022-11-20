@@ -357,9 +357,14 @@ def trainCam_ID(epoch, feat, camera_feat, camera_out0, cameras, camera_loss):
     return loss
 
 def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
-                camera_feat_RGB, camera_feat_Ir, cameras_RGB, cameras_Ir, gray_loss, disc_loss):
+                camera_feat_RGB, camera_feat_Ir, cameras_RGB, cameras_Ir, gray_loss, disc_loss, featIr=None):
 
-    xZ, xAdapt = net.generate(epoch, xRGB=xRGB, content=featRGBX4, style=camera_feat_Ir, xIR=xIR)
+    specIR = nn.AdaptiveAvgPool1d(512)(featIr)
+    downCam = nn.AdaptiveAvgPool1d(net.camera_id.pool_dim - 512)(camera_feat_Ir)
+    style = torch.cat((specIR, downCam), dim=1)
+    xZ, xAdapt = net.generate(epoch, xRGB=xRGB, content=featRGBX4, style=style, xIR=xIR)
+    trainDisc_ID(epoch, xRGB, xIR, xZ.detach(), disc_loss)
+
     # feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = None, None, None, None
     feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
 
@@ -369,11 +374,12 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
     # loss_reconst = reconst_loss(xAdapt, xRGB)
     loss_ID = criterion_id(out0_Z, idRGB)
 
+
     loss_camID = criterion_id(camera_out0_Z, cameras_Ir - 1)
     loss_color2gray = reconst_loss(featRGB, feat_Z)
 
     loss_thermal2gray = reconst_loss(camera_feat_Ir, camera_feat_Z)
-    trainDisc_ID(epoch, xRGB, xIR, xZ, disc_loss)
+
     valid = torch.ones(xRGB.size(0), 1).cuda()
     loss_disc = F.binary_cross_entropy(net.discriminate(xZ), valid)
     # normilizeLoss = (1 - xAdapt.sum(dim=1)).pow(2).mean() * 10
@@ -403,7 +409,7 @@ def trainDisc_ID(epoch, xRGB, xIR, xZ, disc_loss):
     disc_optimizer.step()
 
 
-train_only_ReID = True
+train_only_ReID = False
 train_only_generator = False
 use_pre_feature = False
 
@@ -519,7 +525,7 @@ def train(epoch):
         loss = 0
         if train_only_ReID is False:
             gen_loss, camera_out0_Z, out0_Z, feat_Z  = trainGen_ID(epoch, input1, input2, featRGB, featRGBX4, label1, label2,
-                                   camera_RGB, camera_Ir, cam1, cam2, gray_loss, disc_loss)
+                                   camera_RGB, camera_Ir, cam1, cam2, gray_loss, disc_loss, featIr=featIR)
             loss = loss + 0.5 * (gen_loss)
             _, predicted = camera_out0_Z.max(1)
             correct += (predicted.eq(cam2 - 1).sum().item() / 2)

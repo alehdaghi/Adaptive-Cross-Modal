@@ -105,8 +105,8 @@ class ModelAdaptive(nn.Module):
 
 
         xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5)
-        xZ = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
-        # xZ = xAdapt.mean(dim=1, keepdim=True).expand(-1, 3, -1, -1)
+        # xZ = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
+        xZ = xAdapt.mean(dim=1, keepdim=True).expand(-1, 3, -1, -1)
 
         # for i in range(b):
         #     invTrans(xNorm[i].detach()).save('images/N' + str(i) + '.png')
@@ -156,52 +156,43 @@ class Camera_net(nn.Module):
         else:
             self.pool_dim = 512
 
-        self.pool_dim = 512
+        self.pool_dim = 576
         # self.encoder = base_resnet(arch=arch).resnet_part2[2]  # layer4
-        self.encoder = torch.nn.Sequential(ShallowModule('resnet18'), base_resnet('resnet18'))
+        m_net = torchvision.models.mobilenet_v3_small(pretrained=True)
+        self.encoder = m_net.features
 
         self.dim = 0
         # self.part_num = 5
 
         activation = nn.Sigmoid()
 
-        self.l2norm = Normalize(2)
+        self.camera_classifier = nn.Linear(self.pool_dim, camera_num)
+        # self.modality_specific = nn.Linear(self.pool_dim, class_num)
+        # self.person_classifier = nn.Linear(self.pool_dim, camera_num)
 
-        self.camera_bottleneck = nn.BatchNorm1d(self.pool_dim)
-        self.camera_bottleneck.bias.requires_grad_(False)  # no shift
-        nn.init.constant_(self.camera_bottleneck.bias, 0)
-        self.camera_classifier = nn.Linear(self.pool_dim, camera_num, bias=False)
-        self.camera_bottleneck.apply(weights_init_kaiming)
-        self.camera_classifier.apply(weights_init_classifier)
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-
-        # self.adaptors = nn.Parameter(torch.ones(6, 2, 3))
-        # self.adaptors.register_hook(self.parameters_hook)
 
     def forward(self, x, person_mask):
         cameraFeat = self.encoder(x)
-
         # if (self.training):
         #     cameraFeat = (1 - person_mask) * cameraFeat
 
-        camera_global = embed_net.gl_pool(cameraFeat, 'off')
-        cam_feat = self.camera_bottleneck(camera_global)
-
-        return cam_feat, self.camera_classifier(cam_feat)
+        cam_feat = embed_net.gl_pool(cameraFeat, 'off')
+        return cam_feat, self.camera_classifier(cam_feat)\
+            # , self.modality_classifier(cam_feat)
 
 
 class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
         # self.encoder = base_resnet(arch=arch).resnet_part2[2]  # layer4
-        resnet = torchvision.models.resnet18(pretrained=True)
-        self.model = torch.nn.Sequential(resnet.conv1, resnet.bn1, nn.ReLU(inplace=True), resnet.maxpool,
-                                         resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4)
-        self.discriminator = nn.Linear(512, 1)
+        m_net = torchvision.models.mobilenet_v3_small(pretrained=True)
+        self.encoder = m_net.features
+
+        self.discriminator = nn.Linear(576, 1)
         self.activation = nn.Sigmoid()
 
     def forward(self, x):
-        feat = self.model(x)
+        feat = self.encoder(x)
         feat = embed_net.gl_pool(feat, 'off')
         d = self.discriminator(feat)
         return self.activation(d)
