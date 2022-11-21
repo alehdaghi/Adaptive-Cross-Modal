@@ -361,7 +361,7 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
 
     specIR = nn.AdaptiveAvgPool1d(512)(featIr)
     downCam = nn.AdaptiveAvgPool1d(net.camera_id.pool_dim - 512)(camera_feat_Ir)
-    style = torch.cat((specIR, downCam), dim=1)
+    style = torch.cat((specIR, downCam.detach()), dim=1)
     xZ, xAdapt = net.generate(epoch, xRGB=xRGB, content=featRGBX4, style=style, xIR=xIR)
     trainDisc_ID(epoch, xRGB, xIR, xZ.detach(), disc_loss)
 
@@ -381,6 +381,7 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
     loss_thermal2gray = reconst_loss(camera_feat_Ir, camera_feat_Z)
 
     valid = torch.ones(xRGB.size(0), 1).cuda()
+    net.discriminator.eval()
     loss_disc = F.binary_cross_entropy(net.discriminate(xZ), valid)
     # normilizeLoss = (1 - xAdapt.sum(dim=1)).pow(2).mean() * 10
 
@@ -401,7 +402,7 @@ def trainDisc_ID(epoch, xRGB, xIR, xZ, disc_loss):
 
     x = torch.cat((xRGB, xIR, xZ.detach().clone()), dim=0)
     l = torch.cat((valid, fake), dim=0)
-
+    net.discriminator.train()
     loss = F.binary_cross_entropy(net.discriminate(x), l)
     disc_loss.update(loss.item(), l.size(0))
     disc_optimizer.zero_grad()
