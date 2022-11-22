@@ -273,14 +273,14 @@ if args.optim == 'sgd':
 
 
 
-    # optimizer = optim.SGD([
-    #     {'params': base_params, 'lr': 0.1 * args.lr},
-    #     {'params': net.camera_id.parameters(), 'lr': 0.1 * args.lr},
-    #     {'params': net.person_id.bottleneck.parameters(), 'lr': args.lr},
-    #     {'params': net.person_id.classifier.parameters(), 'lr': args.lr},
-    #     # {'params': gen_params, 'lr': args.lr}
-    #     ],
-    #     weight_decay=5e-4, momentum=0.9, nesterov=True)
+    optimizer = optim.SGD([
+        {'params': base_params, 'lr': 0.1 * args.lr},
+        {'params': net.camera_id.parameters(), 'lr': 0.1 * args.lr},
+        {'params': net.person_id.bottleneck.parameters(), 'lr': args.lr},
+        {'params': net.person_id.classifier.parameters(), 'lr': args.lr},
+        # {'params': gen_params, 'lr': args.lr}
+        ],
+        weight_decay=5e-4, momentum=0.9, nesterov=True)
 
     # adaptor_optimizer = optim.SGD([
     #     {'params': net.camera_id.parameters(), 'lr': 0.1 * args.lr},
@@ -289,12 +289,20 @@ if args.optim == 'sgd':
     # ],
     #     weight_decay=5e-4, momentum=0.9, nesterov=True)
     reid_params = list(net.person_id.parameters()) + list(net.camera_id.parameters())
-    optimizer = optim.Adam(reid_params, lr=0.001, betas=(0.9, 0.999), weight_decay=0.0001)
+    # optimizer = optim.Adam(reid_params, lr=0.001, betas=(0.9, 0.999), weight_decay=0.0001)
 
     gen_params = list(net.adaptor.parameters()) + list(net.mlp.parameters()) \
         # + list(net.person_id.z_module.parameters()) + list(net.camera_id.parameters())
-    adaptor_optimizer = optim.Adam(gen_params, lr=0.0005, betas=(0.7, 0.999), weight_decay=0.0001)
-    disc_optimizer = optim.Adam(net.discriminator.parameters(), lr=0.0005, betas=(0.7, 0.999), weight_decay=0.0001)
+
+    adaptor_optimizer = optim.SGD([
+        {'params': gen_params, 'lr': 0.1 * args.lr}]
+        ,  weight_decay=5e-4, momentum=0.9, nesterov=True)
+    disc_optimizer = optim.SGD([
+        {'params': net.discriminator.parameters(), 'lr': 0.1 * args.lr}]
+        , weight_decay=5e-4, momentum=0.9, nesterov=True)
+
+    # adaptor_optimizer = optim.Adam(gen_params, lr=0.0005, betas=(0.7, 0.999), weight_decay=0.0001)
+    # disc_optimizer = optim.Adam(net.discriminator.parameters(), lr=0.0005, betas=(0.7, 0.999), weight_decay=0.0001)
 
 # exp_lr_scheduler = lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 def adjust_learning_rate(optimizer, epoch):
@@ -321,6 +329,7 @@ def trainRe_ID(epoch, feat, out0, labels, train_loss, id_loss, tri_loss, gray_lo
 
     loss_tri, _ = hctriplet(feat, labels)
     # loss_color2gray = 30 * reconst_loss(color_feat, gray_feat.detach().clone())
+    loss_tri = 5 * loss_tri
     loss_id = criterion_id(out0, labels)
     loss = loss_id + loss_tri #+ loss_color2gray
 
@@ -366,8 +375,10 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
     trainDisc_ID(epoch, xRGB, xIR, xZ.detach(), disc_loss)
 
     # feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = None, None, None, None
-    feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
 
+    net.freeze_person()
+    feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
+    net.unFreeze_person()
     # color_feat, thermal_feat = torch.split(feat, cameras.shape[0] // 2)
     # color_cam_feat, thermal_cam_feat= torch.split(camera_feat, cameras.shape[0] // 2)
 
@@ -382,6 +393,7 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
 
     valid = torch.ones(xRGB.size(0), 1).cuda()
     net.discriminator.eval()
+    net.requires_grad_(False)
     loss_disc = F.binary_cross_entropy(net.discriminate(xZ), valid)
     # normilizeLoss = (1 - xAdapt.sum(dim=1)).pow(2).mean() * 10
 
@@ -403,7 +415,9 @@ def trainDisc_ID(epoch, xRGB, xIR, xZ, disc_loss):
     x = torch.cat((xRGB, xIR, xZ.detach().clone()), dim=0)
     l = torch.cat((valid, fake), dim=0)
     net.discriminator.train()
-    loss = F.binary_cross_entropy(net.discriminate(x), l)
+    net.requires_grad_(True)
+    p = net.discriminate(x)
+    loss = F.binary_cross_entropy(p, l)
     disc_loss.update(loss.item(), l.size(0))
     disc_optimizer.zero_grad()
     loss.backward()
@@ -532,9 +546,9 @@ def train(epoch):
             correct += (predicted.eq(cam2 - 1).sum().item() / 2)
             _, predicted = out0_Z.max(1)
             correct += (predicted.eq(label1).sum().item() / 2)
-            feat = torch.cat((feat, feat_Z), dim=0)
-            labels = torch.cat((labels, label1), dim=0)
-            out0 = torch.cat((out0, out0_Z), dim=0)
+            # feat = torch.cat((feat, feat_Z), dim=0)
+            # labels = torch.cat((labels, label1), dim=0)
+            # out0 = torch.cat((out0, out0_Z), dim=0)
 
 
 
