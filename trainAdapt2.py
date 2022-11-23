@@ -399,7 +399,7 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
 
     valid = torch.ones(xRGB.size(0), 1).cuda()
     net.discriminator.eval()
-    net.requires_grad_(False)
+    net.discriminator.requires_grad_(False)
     loss_disc = F.binary_cross_entropy(net.discriminate(xZ), valid)
     # normilizeLoss = (1 - xAdapt.sum(dim=1)).pow(2).mean() * 10
 
