@@ -41,7 +41,7 @@ class ModelAdaptive(nn.Module):
         super(ModelAdaptive, self).__init__()
         self.person_id = embed_net(class_num, no_local, gm_pool, arch)
         self.camera_id = Camera_net(camera_num, arch)
-        self.adaptor = Decoder(output_dim=3)
+        self.adaptor = Decoder(output_dim=4)
         self.mlp = MLP(self.camera_id.pool_dim, get_num_adain_params(self.adaptor), 128, 1, norm='none', activ='relu')
         self.discriminator = Discriminator()
 
@@ -104,9 +104,10 @@ class ModelAdaptive(nn.Module):
         xAdapt = self.adaptor(content, transfer_style)  # + (1-alpha) * torch.rand(b, 3, 1, 1).cuda()
 
 
-        xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5)
-        # xZ = (xNorm * xRGB).sum(dim=1, keepdim=True).expand(-1, 3, -1, -1)
-        xZ = xAdapt.mean(dim=1, keepdim=True).expand(-1, 3, -1, -1)
+        # xNorm = xAdapt / (xAdapt.sum(dim=1, keepdim=True) + 1e-5)
+
+        xZ = (xAdapt[:, -1].unsqueeze(1) + (xAdapt[:, :-1] * xRGB).sum(dim=1, keepdim=True)).expand(-1, 3, -1, -1)  # a*R + b*G + c*B + d
+        # xZ = xAdapt.mean(dim=1, keepdim=True).expand(-1, 3, -1, -1)
 
         # for i in range(b):
         #     invTrans(xNorm[i].detach()).save('images/N' + str(i) + '.png')

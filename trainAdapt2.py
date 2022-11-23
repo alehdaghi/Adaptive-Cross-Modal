@@ -23,6 +23,7 @@ from utils import *
 from loss import *
 from tensorboardX import SummaryWriter
 import einops
+import random
 
 parser = argparse.ArgumentParser(description='PyTorch Cross-Modality Training')
 parser.add_argument('--dataset', default='sysu', help='dataset name: regdb or sysu]')
@@ -252,12 +253,13 @@ cross_triplet_creiteron = TripletLoss(0.3, 'euclidean')
 reconst_loss = nn.MSELoss()
 hetro_loss = HetroCenterLoss()
 hctriplet = HcTripletLoss(margin=0.3)
-
+twinsloss = BarlowTwins_loss(batch_size=loader_batch, margin=args.margin)
 
 criterion_id.to(device)
 criterion_tri.to(device)
 cross_triplet_creiteron.margin_loss.to(device)
 reconst_loss.to(device)
+twinsloss.to(device)
 
 criterion_contrastive = SupConLoss()
 
@@ -328,10 +330,11 @@ def trainRe_ID(epoch, feat, out0, labels, train_loss, id_loss, tri_loss, gray_lo
     # color_cam_feat, thermal_cam_feat, gray_cam_feat = torch.split(camera_feat, label1.shape[0])
 
     loss_tri, _ = hctriplet(feat, labels)
+    loss_twins = twinsloss(feat, labels)
     # loss_color2gray = 30 * reconst_loss(color_feat, gray_feat.detach().clone())
     loss_tri = 5 * loss_tri
     loss_id = criterion_id(out0, labels)
-    loss = loss_id + loss_tri #+ loss_color2gray
+    loss = loss_id + loss_tri + loss_twins #+ loss_color2gray
 
     train_loss.update(loss.item(), labels.size(0))
     id_loss.update(loss_id.item(), labels.size(0))
@@ -370,15 +373,18 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
 
     specIR = nn.AdaptiveAvgPool1d(512)(featIr)
     downCam = nn.AdaptiveAvgPool1d(net.camera_id.pool_dim - 512)(camera_feat_Ir)
-    style = torch.cat((specIR, downCam.detach()), dim=1)
+    style = camera_feat_Ir#torch.cat((specIR, downCam.detach()), dim=1)
     xZ, xAdapt = net.generate(epoch, xRGB=xRGB, content=featRGBX4, style=style, xIR=xIR)
-    trainDisc_ID(epoch, xRGB, xIR, xZ.detach(), disc_loss)
+    disc_itself_loss = 0
+
+    if random.randint(0, 100) < 10:
+        disc_itself_loss = trainDisc_ID(epoch, xRGB, xIR, xZ.detach(), disc_loss)
 
     # feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = None, None, None, None
 
-    net.freeze_person()
+    # net.freeze_person()
     feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = net(xZ, xZ, modal=2, epoch=epoch)
-    net.unFreeze_person()
+    # net.unFreeze_person()
     # color_feat, thermal_feat = torch.split(feat, cameras.shape[0] // 2)
     # color_cam_feat, thermal_cam_feat= torch.split(camera_feat, cameras.shape[0] // 2)
 
@@ -400,6 +406,7 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
     loss = loss_ID + loss_camID + loss_color2gray + loss_thermal2gray + loss_disc #+ normilizeLoss
     # loss = loss_reconst + loss_ID + loss_color2gray + loss_camID
     gray_loss.update(loss.item(), cameras_Ir.size(0))
+    disc_loss.update(loss_disc.item() + disc_itself_loss, cameras_Ir.size(0))
     # trainDisc_ID(epoch, xRGB,xIR, xZ, disc_loss)
     # adaptor_optimizer.zero_grad()
     # loss.backward()
@@ -418,14 +425,15 @@ def trainDisc_ID(epoch, xRGB, xIR, xZ, disc_loss):
     net.requires_grad_(True)
     p = net.discriminate(x)
     loss = F.binary_cross_entropy(p, l)
-    disc_loss.update(loss.item(), l.size(0))
+
     disc_optimizer.zero_grad()
     loss.backward()
     disc_optimizer.step()
+    return loss.item()
 
 
 train_only_ReID = False
-train_only_generator = False
+train_only_generator = True
 use_pre_feature = False
 
 if train_only_generator:
@@ -438,7 +446,7 @@ def loadAllFeat():
     if train_only_generator is False or use_pre_feature is False:
         return
     net.eval()
-    availabeIDS = np.unique(trainset.train_color_label)
+    availabeIDS = np.unique(trainset.train_color_label) [:2]
 
     with torch.no_grad():
         for id in availabeIDS:
@@ -446,9 +454,10 @@ def loadAllFeat():
             # t_c = torch.empty(len(thermal_pos[id]), model.pool_dim)
             input_c = torch.stack([transform_test(trainset.train_color_image[i]) for i in color_pos[id]])
             input_t = torch.stack([transform_test(trainset.train_ir_image[i]) for i in thermal_pos[id]])
-            feat_c, _, feat_c_X4, _ = net.person_id(xRGB=input_c.cuda(), xIR=None, modal=1, with_feature=True)
+            c = input_t.shape[0]
+            feat_c, _, feat_c_X4, _ = net.person_id(xRGB=input_c.cuda(), xIR=input_t.cuda(), modal=0, with_feature=True)
             cam_feat_t, _  = net.camera_id(input_t.cuda(), None)
-            featRGB_all[color_pos[id]] = feat_c.cpu()
+            featRGB_all[color_pos[id]] = feat_c[:c].cpu()
             featRGBX4_all[color_pos[id]] = feat_c_X4.cpu()
             camera_Ir_all[thermal_pos[id]] = cam_feat_t.cpu()
             # dis[id] = torch.linalg.norm(feat_c.mean(dim=0) - feat_t.mean(dim=0)).item()
@@ -522,9 +531,11 @@ def train(epoch):
                 featRGBX4 = featRGBX4_all[c_index].cuda()
             else:
                 with torch.no_grad():
-                    featRGB, _, featRGBX4, _ = net.person_id(xRGB=input1, xIR=None, modal=1, with_feature=True)
-                    camera_Ir, _ = net.camera_id(input2, None)
-                    camera_RGB, _ = net.camera_id(input1, None)
+                    feat, out0, camera_feat, camera_out0, featX4 = net(input1, input2, modal=args.uni, epoch=epoch,
+                                                                       with_feature=True)
+                    featRGB, featIR = feat.split(bs)
+                    featRGBX4, featIRX4 = featX4.split(bs)
+                    camera_RGB, camera_Ir = camera_feat.split(bs)
 
             # with torch.no_grad():
             #     featRGB , _, camera_Ir, _, featRGBX4 = net(input1, input2, modal=args.uni, epoch=epoch, with_feature=True)
