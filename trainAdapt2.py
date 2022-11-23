@@ -422,7 +422,7 @@ def trainDisc_ID(epoch, xRGB, xIR, xZ, disc_loss):
     x = torch.cat((xRGB, xIR, xZ.detach().clone()), dim=0)
     l = torch.cat((valid, fake), dim=0)
     net.discriminator.train()
-    net.requires_grad_(True)
+    net.discriminator.requires_grad_(True)
     p = net.discriminate(x)
     loss = F.binary_cross_entropy(p, l)
 
