@@ -377,7 +377,7 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
     xZ, xAdapt = net.generate(epoch, xRGB=xRGB, content=featRGBX4, style=style, xIR=xIR, transfer_style=False)
     disc_itself_loss = 0
 
-    if random.randint(0, 100) < 10:
+    if random.randint(0, 100) < 50:
         disc_itself_loss = trainDisc_ID(epoch, xRGB, xIR, xZ.detach(), disc_loss)
 
     # feat_Z, out0_Z, camera_feat_Z, camera_out0_Z = None, None, None, None
@@ -415,7 +415,7 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
 
 def trainDisc_ID(epoch, xRGB, xIR, xZ, disc_loss):
     b = xRGB.shape[0]
-    w = torch.rand(b, 3) + 0.01
+    w = torch.rand(b, 3).cuda() + 0.01
 
     xGray = torch.einsum('b c w h, b c -> b w h', xRGB, w).unsqueeze(1).expand(-1, 3,-1,-1)
 
