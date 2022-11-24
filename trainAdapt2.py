@@ -216,9 +216,9 @@ print('Data Loading Time:\t {:.3f}'.format(time.time() - end))
 
 print('==> Building model..')
 if args.method =='base':
-    net = ModelAdaptive(n_class, no_local= 'off', gm_pool =  'off', arch=args.arch, camera_num= 2 if dataset == 'regdb' else 6)
+    net = ModelAdaptive(n_class, no_local= 'off', gm_pool =  'off', arch=args.arch, camera_num= 2 if dataset == 'regdb' else 2)
 else:
-    net = ModelAdaptive(n_class, no_local= 'on', gm_pool = 'on', arch=args.arch)
+    net = ModelAdaptive(n_class, no_local= 'on', gm_pool = 'on', arch=args.arch, camera_num=2)
 
 net.to(device)
 cudnn.benchmark = True
@@ -374,7 +374,7 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
     specIR = nn.AdaptiveAvgPool1d(512)(featIr)
     downCam = nn.AdaptiveAvgPool1d(net.camera_id.pool_dim - 512)(camera_feat_Ir)
     style = camera_feat_Ir#torch.cat((specIR, downCam.detach()), dim=1)
-    xZ, xAdapt = net.generate(epoch, xRGB=xRGB, content=featRGBX4, style=style, xIR=xIR)
+    xZ, xAdapt = net.generate(epoch, xRGB=xRGB, content=featRGBX4, style=style, xIR=xIR, transfer_style=False)
     disc_itself_loss = 0
 
     if random.randint(0, 100) < 10:
@@ -502,7 +502,8 @@ def train(epoch):
             net.freeze_person()
         else:
             net.unFreeze_person()
-
+        cam1 = torch.ones_like(label1) + 1
+        cam2 = torch.zeros_like(label2) + 1
         bs = label1.shape[0]
         input1 = Variable(input1.cuda())
         input2 = Variable(input2.cuda())
