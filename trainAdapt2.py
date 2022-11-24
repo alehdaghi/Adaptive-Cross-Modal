@@ -393,9 +393,9 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
 
 
     loss_camID = criterion_id(camera_out0_Z, cameras_Ir - 1)
-    loss_color2gray = reconst_loss(featRGB, feat_Z)
+    loss_color2gray = reconst_loss(featRGB.detach(), feat_Z)
 
-    loss_thermal2gray = reconst_loss(camera_feat_Ir, camera_feat_Z)
+    loss_thermal2gray = reconst_loss(camera_feat_Ir.detach(), camera_feat_Z)
 
     valid = torch.ones(xRGB.size(0), 1).cuda()
     net.discriminator.eval()
