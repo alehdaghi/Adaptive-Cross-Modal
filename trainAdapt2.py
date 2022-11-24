@@ -414,12 +414,17 @@ def trainGen_ID(epoch, xRGB, xIR, featRGB, featRGBX4, idRGB, idIr,
     return loss, camera_out0_Z, out0_Z, feat_Z
 
 def trainDisc_ID(epoch, xRGB, xIR, xZ, disc_loss):
-    valid = torch.ones(xRGB.size(0)+xIR.size(0), 1).cuda()
+    b = xRGB.shape[0]
+    w = torch.rand(b, 3) + 0.01
+
+    xGray = torch.einsum('b c w h, b c -> b w h', xRGB, w).unsqueeze(1).expand(-1, 3,-1,-1)
+
+    valid = torch.ones(xRGB.size(0) + xGray.size(0) + xIR.size(0), 1).cuda()
     # valid = torch.ones(xIR.size(0), 1).cuda()
 
     fake = torch.zeros(xZ.size(0), 1).cuda()
 
-    x = torch.cat((xRGB, xIR, xZ.detach().clone()), dim=0)
+    x = torch.cat((xRGB, xGray, xIR, xZ.detach().clone()), dim=0)
     l = torch.cat((valid, fake), dim=0)
     net.discriminator.train()
     net.discriminator.requires_grad_(True)
