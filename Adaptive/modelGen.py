@@ -224,6 +224,9 @@ class embed_net(nn.Module):
         self.bottleneck = nn.BatchNorm1d(self.pool_dim)
         self.bottleneck.bias.requires_grad_(False)  # no shift
         nn.init.constant_(self.bottleneck.bias, 0)
+
+        self.drop = nn.Dropout(p=0.2, inplace=True)
+
         self.classifier = nn.Linear(self.pool_dim, class_num, bias=False)
         self.bottleneck.apply(weights_init_kaiming)
         self.classifier.apply(weights_init_classifier)
@@ -268,6 +271,7 @@ class embed_net(nn.Module):
         person_mask = self.compute_mask(x)
         feat_pool = self.gl_pool(x, self.gm_pool)
         feat = self.bottleneck(feat_pool)
+        feat = self.drop(feat)
 
         if with_feature:
             return feat_pool, self.classifier(feat), x, person_mask
