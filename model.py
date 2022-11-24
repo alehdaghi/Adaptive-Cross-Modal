@@ -166,11 +166,11 @@ class base_resnet(nn.Module):
         resnet.layer4[0].downsample[0].stride = (1, 1)
 
         self.resnet_part2 = nn.Sequential(resnet.layer2,
-                                          nn.Dropout2d(0.05, inplace=True),
+                                          nn.Dropout2d(0.05),
                                           resnet.layer3,
-                                          nn.Dropout2d(0.05, inplace=True),
+                                          nn.Dropout2d(0.05),
                                           resnet.layer4,
-                                          nn.Dropout2d(0.1, inplace=True)
+                                          nn.Dropout2d(0.1)
                                           )
 
     def forward(self, x):
