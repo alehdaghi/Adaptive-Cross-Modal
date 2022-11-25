@@ -18,7 +18,7 @@ from ICCV21_CAJ.ChannelAug import ChannelRandomErasing
 from data_loader import SYSUData, RegDBData, TestData
 from data_manager import *
 from eval_metrics import eval_sysu, eval_regdb
-from gradual.model import embed_net
+from focalnet.model import embed_net
 from sup_con_loss import SupConLoss
 from utils import *
 from loss import *
@@ -230,7 +230,7 @@ print('Data Loading Time:\t {:.3f}'.format(time.time() - end))
 
 print('==> Building model..')
 if args.method =='base':
-    net = embed_net(n_class, no_local= 'off', gm_pool =  'off', arch=args.arch, separate_batch_norm=args.separate_batch_norm, use_contrast=args.cont_loss)
+    net = embed_net(n_class)
 else:
     net = embed_net(n_class, no_local= 'on', gm_pool = 'on', arch=args.arch, separate_batch_norm=args.separate_batch_norm, use_contrast=args.cont_loss)
 
