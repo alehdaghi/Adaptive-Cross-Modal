@@ -541,7 +541,7 @@ for step in range(-1, N):
                                       sampler=sampler, num_workers=args.workers, drop_last=True)
 
         # training
-        # train(epoch, step)
+        train(epoch, step)
 
         if epoch >= 0 and epoch % 4 == 0 or epoch >= (end_epoch - 1):
             print('Test Epoch: {}'.format(epoch))
