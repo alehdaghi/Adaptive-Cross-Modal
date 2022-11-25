@@ -237,9 +237,8 @@ else:
 net.to(device)
 cudnn.benchmark = True
 print(net.count_params())
-pool_dim = 2048
-if args.arch == 'resnet18':
-    pool_dim = 512
+pool_dim = net.pool_dim
+
 if len(args.resume) > 0:
     model_path = args.resume
     if os.path.isfile(model_path):
@@ -542,7 +541,7 @@ for step in range(-1, N):
                                       sampler=sampler, num_workers=args.workers, drop_last=True)
 
         # training
-        train(epoch, step)
+        # train(epoch, step)
 
         if epoch >= 0 and epoch % 4 == 0 or epoch >= (end_epoch - 1):
             print('Test Epoch: {}'.format(epoch))
