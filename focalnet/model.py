@@ -1,4 +1,4 @@
-from focalnet import focalnet_tiny_lrf
+from focalnet.focalnet import focalnet_tiny_lrf
 import torch
 import torch.nn as nn
 from torch.nn import init
@@ -112,7 +112,7 @@ class embed_net(nn.Module):
             x = self.gray_module(x3)
 
         # shared block
-        x = self.pos_drop(x)
+        x = self.shared_module.pos_drop(x)
 
         for layer in self.shared_module.layers:
             x, H, W = layer(x, H, W)
