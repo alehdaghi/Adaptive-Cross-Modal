@@ -84,7 +84,7 @@ class embed_net(nn.Module):
 
         self.shared_module = backbone
 
-        self.pool_dim = 512
+        self.pool_dim = 768
 
         self.l2norm = Normalize(2)
         self.bottleneck = nn.BatchNorm1d(self.pool_dim)
@@ -118,7 +118,7 @@ class embed_net(nn.Module):
             x, H, W = layer(x, H, W)
         x = self.shared_module.norm(x)  # B L C
         x_pool = self.shared_module.avgpool(x.transpose(1, 2))  # B C 1
-        x_pool = torch.flatten(x, 1)
+        x_pool = torch.flatten(x_pool, 1)
 
         feat = self.bottleneck(x_pool)
         score = self.classifier(feat)
