@@ -105,11 +105,11 @@ class embed_net(nn.Module):
                 x3, _, _ = self.gray_module(x3)
                 x = torch.cat((x, x3), 0)
         elif modal == 1:
-            x = self.visible_module(x1)
+            x, H, W = self.visible_module(x1)
         elif modal == 2:
-            x = self.thermal_module(x2)
+            x, H, W = self.thermal_module(x2)
         elif modal == 3:
-            x = self.gray_module(x3)
+            x, H, W = self.gray_module(x3)
 
         # shared block
         x = self.shared_module.pos_drop(x)
