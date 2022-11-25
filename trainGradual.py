@@ -378,7 +378,8 @@ def train(epoch, step):
             # loss_tri_thermal = cross_triplet_creiteron(thermal_feat, color_feat, color_feat,
             #                                            thermal_label, color_label, color_label)
             # loss_tri = (loss_tri_color + loss_tri_thermal) / 2
-            loss_tri, correct = hctriplet(feat, labels)
+            loss_tri, correctDist = hctriplet(feat, labels)
+            correct += correctDist
             loss_twins = twinsloss(feat, labels)
             # loss_tri = cross_triplet_creiteron(feat, feat, feat,
             #                                    labels, labels, labels)
