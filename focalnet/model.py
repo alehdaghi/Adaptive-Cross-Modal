@@ -124,7 +124,7 @@ class embed_net(nn.Module):
         score = self.classifier(feat)
 
         if self.training :
-            return x_pool, score
+            return x_pool, score, None
         else:
             return self.l2norm(x_pool), self.l2norm(feat)
 
