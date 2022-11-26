@@ -123,8 +123,10 @@ class embed_net(nn.Module):
         feat = self.bottleneck(x_pool)
         score = self.classifier(feat)
 
+
+
         if self.training :
-            return x_pool, score, None
+            return x_pool, score, x if with_feature else None
         else:
             return self.l2norm(x_pool), self.l2norm(feat)
 
