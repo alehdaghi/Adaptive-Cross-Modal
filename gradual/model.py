@@ -182,7 +182,7 @@ class base_resnet(nn.Module):
         return s
 
 class embed_net(nn.Module):
-    def __init__(self,  class_num, no_local= 'on', gm_pool = 'on', arch='resnet50',
+    def __init__(self,  class_num, no_local= 'off', gm_pool = 'off', arch='resnet50',
                  separate_batch_norm=False, use_contrast=False):
         super(embed_net, self).__init__()
 
