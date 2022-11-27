@@ -536,8 +536,8 @@ for step in range(0, N):
         trainset.tIndex = sampler.index2  # thermal index
         trainset.transform = updateTransform(0.3 + (step / N) * (epoch / end_epoch) * 0.6 )
         print(epoch)
-        print(trainset.cIndex)
-        print(trainset.tIndex)
+        # print(trainset.cIndex)
+        # print(trainset.tIndex)
 
         trainloader = data.DataLoader(trainset, batch_size=loader_batch, \
                                       sampler=sampler, num_workers=args.workers, drop_last=True)
