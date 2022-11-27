@@ -18,7 +18,8 @@ from ICCV21_CAJ.ChannelAug import ChannelRandomErasing
 from data_loader import SYSUData, RegDBData, TestData
 from data_manager import *
 from eval_metrics import eval_sysu, eval_regdb
-from focalnet.model import embed_net
+# from focalnet.model import embed_net
+from gradual.model import embed_net
 from sup_con_loss import SupConLoss
 from utils import *
 from loss import *
@@ -165,7 +166,7 @@ def updateTransform(p):
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     normalize,
-    ChannelRandomErasing(probability = p, sl = 0.01, sh = 0.2)
+    # ChannelRandomErasing(probability = p, sl = 0.01, sh = 0.2)
 ])
 
 
@@ -511,8 +512,8 @@ color_ids = np.unique(trainset.train_color_label)
 ir_ids = np.empty(0, dtype=int)
 # training
 print('==> Start Training...')
-N = 5
-for step in range(-1, N):
+N = 1
+for step in range(0, N):
     print('==> Step {}'.format(step))
     if step != -1:
         selectedIDs = next_IDs(net, all_ids.size // N + 1, all_ids, ir_ids, trainset,
@@ -522,7 +523,7 @@ for step in range(-1, N):
 
     # ir_ids = np.random.choice(color_label, ((step+1) * color_label.size)//N, replace=False)
     start_epoch = 0
-    end_epoch = 20 #if step <= 0 or step >= N-1 else 2
+    end_epoch = 120 #if step <= 0 or step >= N-1 else 2
     for epoch in range(start_epoch, end_epoch):
 
         print('==> Preparing Data Loader...')
