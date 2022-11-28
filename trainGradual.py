@@ -298,7 +298,7 @@ if args.optim == 'sgd':
 def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
     if epoch < 10:
-        lr = args.lr * (epoch + 1) / 20
+        lr = args.lr * (epoch + 1) / 10
     elif epoch >= 10 and epoch < 20:
         lr = args.lr
     elif epoch >= 20 and epoch < 50:
