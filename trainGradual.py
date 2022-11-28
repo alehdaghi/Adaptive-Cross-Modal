@@ -20,6 +20,7 @@ from data_manager import *
 from eval_metrics import eval_sysu, eval_regdb
 # from focalnet.model import embed_net
 from gradual.model import embed_net
+from losses.assignment_loss import LinearSumAssignment
 from sup_con_loss import SupConLoss
 from utils import *
 from loss import *
@@ -265,6 +266,8 @@ reconst_loss = nn.MSELoss()
 hetro_loss = HetroCenterLoss()
 hctriplet = HcTripletLoss(margin=0.3)
 
+hungarian_loss = LinearSumAssignment()
+
 twinsloss = BarlowTwins_loss(batch_size=loader_batch, margin=args.margin)
 
 criterion_id.to(device)
@@ -352,7 +355,7 @@ def train(epoch, step):
         labels = Variable(labels.cuda())
         data_time.update(time.time() - end)
 
-        feat, out0, contrast_feat = net(input1, input2, x3=input3, modal=args.uni)
+        feat, out0, feat2d = net(input1, input2, x3=input3, modal=args.uni, with_feature=True)
 
         loss_color2gray = torch.tensor(0.0, requires_grad=True, device=device)
         if args.use_gray:
@@ -381,9 +384,10 @@ def train(epoch, step):
             # loss_tri = (loss_tri_color + loss_tri_thermal) / 2
             loss_tri, correctDist = hctriplet(feat, labels)
             correct += correctDist
-            loss_twins = twinsloss(feat, labels)
+            # loss_twins = twinsloss(feat, labels)
             # loss_tri = cross_triplet_creiteron(feat, feat, feat,
             #                                    labels, labels, labels)
+            loss_hung = hungarian_loss(feat2d, None, None)
 
         loss_id = criterion_id(out0, labels)
         #loss_tri, batch_acc = criterion_tri(feat, labels)
@@ -413,7 +417,7 @@ def train(epoch, step):
         train_loss.update(loss.item(), feat.size(0))
         id_loss.update(loss_id.item(), feat.size(0))
         tri_loss.update(loss_tri.item(), feat.size(0))
-        gray_loss.update(loss_color2gray.item(), feat.size(0))
+        gray_loss.update(loss_hung.item(), feat.size(0))
         # center_loss.update(loss_cont.item(), feat.size(0))
         total += labels.size(0)
 
