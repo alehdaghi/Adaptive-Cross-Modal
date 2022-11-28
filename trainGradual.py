@@ -387,7 +387,8 @@ def train(epoch, step):
             # loss_twins = twinsloss(feat, labels)
             # loss_tri = cross_triplet_creiteron(feat, feat, feat,
             #                                    labels, labels, labels)
-            loss_hung = hungarian_loss(feat2d, None, None)
+            p_inds, n_inds = getHardIndices(feat, labels)
+            loss_hung = hungarian_loss(feat2d, p_inds, n_inds)
 
         loss_id = criterion_id(out0, labels)
         #loss_tri, batch_acc = criterion_tri(feat, labels)

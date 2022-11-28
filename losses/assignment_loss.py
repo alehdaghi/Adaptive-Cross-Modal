@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from scipy.optimize import linear_sum_assignment
+from torch.nn import MarginRankingLoss
 
 
 def compute_mask(feat):
@@ -25,8 +26,9 @@ def feature_similarity(feat_q, feat_k):
 class LinearSumAssignment(nn.Module):
     def __init__(self):
         super(LinearSumAssignment, self).__init__()
+        self.criterion = MarginRankingLoss(margin=0.3)
 
-    def forward(self, feat2d, pos_ind, neg_ids):
+    def forward(self, feat2d, pos_ind, neg_ind):
         b, c , h, w = feat2d.shape
         p = h * w // 2 # 50 percent of image used for p2p matching
         mask = compute_mask(feat2d)
@@ -36,11 +38,22 @@ class LinearSumAssignment(nn.Module):
         bMask[maskTr < s[:, :, p : p + 1]] = 0
         bMask = bMask.view(mask.shape)
 
-        featC, featI = torch.split(feat2d, b //2 , 0)
+        featPos = feat2d[pos_ind]
+        featNeg = feat2d[neg_ind]
+        # featC, featI = torch.split(feat2d, b //2 , 0)
         # featPos =
-        sim = feature_similarity(featC * bMask[: b // 2], featI * bMask[b // 2 :])
-        loss = 0
-        for simMat in sim:
-            row_ind, col_ind = linear_sum_assignment(simMat.cpu().detach(), True)
-            loss += (1 - simMat[row_ind, col_ind].sum()/p )
-        return loss / b
+        simPos = feature_similarity(feat2d * bMask, featPos * bMask)
+        simNeg = feature_similarity(feat2d * bMask, featNeg * bMask)
+        pos_dis = torch.empty(b, device=feat2d.device)
+        neg_dis = torch.empty(b, device=feat2d.device)
+        target = -1 * torch.ones(b, device=feat2d.device)
+        i = 0
+        for simMatPos,simMatNeg in zip(simPos, simNeg):
+
+            row_ind, col_ind = linear_sum_assignment(simMatPos.detach().cpu(), True)
+            pos_dis[i] = (1 - simMatPos[row_ind, col_ind].sum() / p)
+            row_ind, col_ind = linear_sum_assignment(simMatNeg.detach().cpu(), True)
+            neg_dis[i] = (1 - simMatNeg[row_ind, col_ind].sum() / p)
+            i = i+1
+
+        return self.criterion(pos_dis, neg_dis, target)

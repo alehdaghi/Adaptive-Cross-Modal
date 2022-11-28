@@ -281,3 +281,52 @@ def next_IDs(model, n, allIDs, currentIDs, trainset, color_pos, thermal_pos, tra
     sortedIDs = np.asarray([i[0] for i in sorted(dis.items(), key = lambda kv: kv[1])])
     return sortedIDs[:n]
 
+def normalize(x, axis=-1):
+    """Normalizing to unit length along the specified dimension.
+    Args:
+      x: pytorch Variable
+    Returns:
+      x: pytorch Variable, same shape as input
+    """
+    x = 1. * x / (torch.norm(x, 2, axis, keepdim=True).expand_as(x) + 1e-12)
+    return x
+
+def getHardIndices(global_feat, labels):
+    """Set requies_grad=Fasle for all the networks to avoid unnecessary computations
+    Args:
+        global_feat : a tensor [batch, feature_dim] features
+        labels      : a tensor [batch] labels of features
+    """
+    global_feat = normalize(global_feat, axis=-1)
+    inputs = global_feat
+
+    n = inputs.size(0)
+    dist_mat = torch.pow(inputs, 2).sum(dim=1, keepdim=True).expand(n, n)
+    dist_mat = dist_mat + dist_mat.t()
+    dist_mat.addmm_(1, -2, inputs, inputs.t())
+    dist_mat = dist_mat.clamp(min=1e-12).sqrt()
+
+    N = dist_mat.size(0)
+    is_pos = labels.expand(N, N).eq(labels.expand(N, N).t())
+    is_neg = labels.expand(N, N).ne(labels.expand(N, N).t())
+
+    dist_ap, relative_p_inds = torch.max(
+        dist_mat[is_pos].contiguous().view(N, -1), 1, keepdim=True)
+    dist_an, relative_n_inds = torch.min(
+        dist_mat[is_neg].contiguous().view(N, -1), 1, keepdim=True)
+
+    dist_ap = dist_ap.squeeze(1)
+    dist_an = dist_an.squeeze(1)
+
+    ind = (labels.new().resize_as_(labels)
+           .copy_(torch.arange(0, N).long())
+           .unsqueeze(0).expand(N, N))
+
+    p_inds = torch.gather(
+        ind[is_pos].contiguous().view(N, -1), 1, relative_p_inds.data)
+    n_inds = torch.gather(
+        ind[is_neg].contiguous().view(N, -1), 1, relative_n_inds.data)
+    # shape [N]
+    p_inds = p_inds.squeeze(1)
+    n_inds = n_inds.squeeze(1)
+    return p_inds, n_inds
