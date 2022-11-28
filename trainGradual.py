@@ -403,7 +403,7 @@ def train(epoch, step):
             loss_cont = criterion_contrastive(p)
             loss = loss_cont + loss_id + loss_color2gray
         else:
-            loss = loss_id + loss_tri + loss_color2gray + loss_twins #+ loss_center
+            loss = loss_id + loss_tri + loss_color2gray #+ loss_twins #+ loss_center
 
         optimizer.zero_grad()
         loss.backward()
