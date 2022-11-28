@@ -323,7 +323,7 @@ class embed_net(nn.Module):
         # clsScore = 0.5 * clsScore + 0.5*torch.stack(detailScore).mean(dim=0)
 
         if with_feature:
-            return x_pool, feat, None, x, None
+            return x_pool, clsScore, x
 
         cont_x = None
         if self.use_contrast:
