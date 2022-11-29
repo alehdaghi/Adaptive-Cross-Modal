@@ -277,7 +277,7 @@ reconst_loss.to(device)
 hctriplet.to(device)
 
 twinsloss.to(device)
-
+F.mse_loss()
 
 criterion_contrastive = SupConLoss()
 
@@ -391,7 +391,7 @@ def train(epoch, step):
             loss_hung = torch.tensor(0.0, requires_grad=True, device=device)
 
             rec_feat = GAP_WithotMaxes(feat2d)
-            loss_hung = reconst_loss(rec_feat, feat)
+            loss_hung = 2 * bs * reconst_loss(rec_feat, feat)
             # loss_hung = hungarian_loss(feat2d, p_inds, n_inds)
 
 
