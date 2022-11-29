@@ -277,7 +277,7 @@ reconst_loss.to(device)
 hctriplet.to(device)
 
 twinsloss.to(device)
-F.mse_loss()
+
 
 criterion_contrastive = SupConLoss()
 
