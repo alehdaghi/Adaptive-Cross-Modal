@@ -336,4 +336,4 @@ def GAP_WithotMaxes(feat2d, p=0.05):
     norms = torch.norm(feat1d, p=2, dim=1)
     _, ind = torch.sort(norms, dim=1)
     s_feat1d = torch.stack([feat1d[i, :, ind[i]] for i in range(b)])
-    return s_feat1d[:, :, firstIndex:].mean(dim=2)
+    return s_feat1d[:, :, :-firstIndex].mean(dim=2)
