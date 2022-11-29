@@ -388,7 +388,12 @@ def train(epoch, step):
             loss_tri, p_inds, n_inds = cross_triplet_creiteron(feat, feat, feat,
                                                labels, labels, labels, with_index=True)
             # p_inds2, n_inds2 = getHardIndices(feat, labels)
-            loss_hung = hungarian_loss(feat2d, p_inds, n_inds)
+            loss_hung = torch.tensor(0.0, requires_grad=True, device=device)
+
+            rec_feat = GAP_WithotMaxes(feat2d)
+            loss_hung = reconst_loss(rec_feat, feat)
+            # loss_hung = hungarian_loss(feat2d, p_inds, n_inds)
+
 
         loss_id = criterion_id(out0, labels)
         #loss_tri, batch_acc = criterion_tri(feat, labels)
@@ -425,7 +430,7 @@ def train(epoch, step):
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
-        if batch_idx % 50 == 0:
+        if batch_idx % 50 == 0 or batch_idx == len(trainloader) - 1:
             print('Epoch: [{}-{}][{}/{}] '
                   'Time: {now} ({batch_time.avg:.3f}) '
                   'lr:{:.3f} '

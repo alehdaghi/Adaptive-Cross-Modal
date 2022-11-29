@@ -327,3 +327,13 @@ def getHardIndices(global_feat, labels):
     p_inds = p_inds.squeeze(1)
     n_inds = n_inds.squeeze(1)
     return p_inds, n_inds
+
+def GAP_WithotMaxes(feat2d, p=0.05):
+    b, c, w, h = feat2d.shape
+    firstIndex = int(w * h * p)
+
+    feat1d = feat2d.view(b, c, -1)
+    norms = torch.norm(feat1d, p=2, dim=1)
+    _, ind = torch.sort(norms, dim=1)
+    s_feat1d = torch.stack([feat1d[i, :, ind[i]] for i in range(b)])
+    return s_feat1d[:, :, firstIndex:].mean(dim=2)
