@@ -158,20 +158,18 @@ class RankingLoss:
     def _batch_hard(self, mat_distance, mat_similarity, more_similar='smaller'):
 
         if more_similar is 'smaller':
-            sorted_mat_distance, _ = torch.sort(mat_distance + (-9999999.) * (1 - mat_similarity), dim=1,
-                                                descending=True)
-            hard_p = sorted_mat_distance[:, 0]
-            sorted_mat_distance, _ = torch.sort(mat_distance + (9999999.) * (mat_similarity), dim=1, descending=False)
-            hard_n = sorted_mat_distance[:, 0]
-            return hard_p, hard_n
+            hard_p, p_ind = torch.max(mat_distance + (-9999999.) * (1 - mat_similarity), dim=1)
+            # hard_p = sorted_mat_distance[:, 0]
+            hard_n, n_ind = torch.min(mat_distance + (9999999.) * (mat_similarity), dim=1)
+            # hard_n = sorted_mat_distance[:, 0]
+            return hard_p, hard_n, p_ind, n_ind
 
         elif more_similar is 'larger':
-            sorted_mat_distance, _ = torch.sort(mat_distance + (9999999.) * (1 - mat_similarity), dim=1,
-                                                descending=False)
-            hard_p = sorted_mat_distance[:, 0]
-            sorted_mat_distance, _ = torch.sort(mat_distance + (-9999999.) * (mat_similarity), dim=1, descending=True)
-            hard_n = sorted_mat_distance[:, 0]
-            return hard_p, hard_n
+            hard_p, p_ind = torch.min(mat_distance + (9999999.) * (1 - mat_similarity), dim=1)
+            # hard_p = sorted_mat_distance[:, 0]
+            hard_n, n_ind = torch.max(mat_distance + (-9999999.) * (mat_similarity), dim=1)
+            # hard_n = sorted_mat_distance[:, 0]
+            return hard_p, hard_n, p_ind, n_ind
 
 
 class TripletLoss(RankingLoss):
@@ -190,7 +188,7 @@ class TripletLoss(RankingLoss):
         self.margin_loss = nn.MarginRankingLoss(margin=margin)
         self.metric = metric
 
-    def __call__(self, emb1, emb2, emb3, label1, label2, label3):
+    def __call__(self, emb1, emb2, emb3, label1, label2, label3, with_index=False):
         '''
 
 		:param emb1: torch.Tensor, [m, dim]
@@ -203,26 +201,29 @@ class TripletLoss(RankingLoss):
         if self.metric == 'cosine':
             mat_dist = cosine_dist(emb1, emb2)
             mat_sim = self._label2similarity(label1, label2)
-            hard_p, _ = self._batch_hard(mat_dist, mat_sim.float(), more_similar='larger')
+            hard_p, _, p_ind, _ = self._batch_hard(mat_dist, mat_sim.float(), more_similar='larger')
 
             mat_dist = cosine_dist(emb1, emb3)
             mat_sim = self._label2similarity(label1, label3)
-            _, hard_n = self._batch_hard(mat_dist, mat_sim.float(), more_similar='larger')
+            _, hard_n, _, n_ind = self._batch_hard(mat_dist, mat_sim.float(), more_similar='larger')
 
             margin_label = -torch.ones_like(hard_p)
 
         elif self.metric == 'euclidean':
             mat_dist = euclidean_dist(emb1, emb2)
             mat_sim = self._label2similarity(label1, label2)
-            hard_p, _ = self._batch_hard(mat_dist, mat_sim.float(), more_similar='smaller')
+            hard_p, _, p_ind, _ = self._batch_hard(mat_dist, mat_sim.float(), more_similar='smaller')
 
             mat_dist = euclidean_dist(emb1, emb3)
             mat_sim = self._label2similarity(label1, label3)
-            _, hard_n = self._batch_hard(mat_dist, mat_sim.float(), more_similar='smaller')
+            _, hard_n, _, n_ind = self._batch_hard(mat_dist, mat_sim.float(), more_similar='smaller')
 
             margin_label = torch.ones_like(hard_p)
 
-        return self.margin_loss(hard_n, hard_p, margin_label)
+        if with_index:
+            return self.margin_loss(hard_n, hard_p, margin_label), p_ind, n_ind
+        else:
+            return self.margin_loss(hard_n, hard_p, margin_label)
 
 
 class HetroCenterLoss(nn.Module):

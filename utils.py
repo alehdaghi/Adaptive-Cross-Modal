@@ -8,6 +8,8 @@ import time
 from functools import reduce
 from sklearn import metrics
 
+from loss import euclidean_dist
+
 
 def time_now():
     return time.strftime('%y-%m-%d %H:%M:%S', time.localtime())
@@ -291,20 +293,15 @@ def normalize(x, axis=-1):
     x = 1. * x / (torch.norm(x, 2, axis, keepdim=True).expand_as(x) + 1e-12)
     return x
 
+
 def getHardIndices(global_feat, labels):
-    """Set requies_grad=Fasle for all the networks to avoid unnecessary computations
+    """
     Args:
         global_feat : a tensor [batch, feature_dim] features
         labels      : a tensor [batch] labels of features
     """
-    global_feat = normalize(global_feat, axis=-1)
-    inputs = global_feat
 
-    n = inputs.size(0)
-    dist_mat = torch.pow(inputs, 2).sum(dim=1, keepdim=True).expand(n, n)
-    dist_mat = dist_mat + dist_mat.t()
-    dist_mat.addmm_(1, -2, inputs, inputs.t())
-    dist_mat = dist_mat.clamp(min=1e-12).sqrt()
+    dist_mat = euclidean_dist(global_feat, global_feat)
 
     N = dist_mat.size(0)
     is_pos = labels.expand(N, N).eq(labels.expand(N, N).t())
