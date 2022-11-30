@@ -42,8 +42,8 @@ class LinearSumAssignment(nn.Module):
         featNeg = feat2d[neg_ind]
         # featC, featI = torch.split(feat2d, b //2 , 0)
         # featPos =
-        simPos = feature_similarity(feat2d * bMask, featPos * bMask)
-        simNeg = feature_similarity(feat2d * bMask, featNeg * bMask)
+        simPos = feature_similarity(feat2d * bMask, featPos * bMask[pos_ind])
+        simNeg = feature_similarity(feat2d * bMask, featNeg * bMask[neg_ind])
         pos_dis = torch.empty(b, device=feat2d.device)
         neg_dis = torch.empty(b, device=feat2d.device)
         target = -1 * torch.ones(b, device=feat2d.device)
