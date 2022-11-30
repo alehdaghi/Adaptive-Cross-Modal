@@ -167,7 +167,7 @@ def updateTransform(p):
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     normalize,
-    ChannelRandomErasing(probability = p, sl = 0.01, sh = 0.2)
+    ChannelRandomErasing(probability = p, sl = 0.015, sh = 0.3)
 ])
 
 
@@ -544,7 +544,7 @@ for step in range(0, N):
 
         trainset.cIndex = sampler.index1  # color index
         trainset.tIndex = sampler.index2  # thermal index
-        trainset.transform = updateTransform(0.2 + (step / N) * (epoch / end_epoch) * 0.4 )
+        trainset.transform = updateTransform(0.2 + ((step+1) / N) * (epoch / end_epoch) * 0.4 )
         print(epoch)
         # print(trainset.cIndex)
         # print(trainset.tIndex)
