@@ -391,7 +391,7 @@ def train(epoch, step):
             loss_hung = torch.tensor(0.0, requires_grad=True, device=device)
 
             rec_feat = GAP_WithotMaxes(feat2d)
-            # loss_max = 2 * bs * reconst_loss(rec_feat, feat)
+            loss_max = 2 * bs * reconst_loss(rec_feat, feat)
             loss_hung = hungarian_loss(feat2d, p_inds, n_inds)
 
 
@@ -413,7 +413,7 @@ def train(epoch, step):
             loss_cont = criterion_contrastive(p)
             loss = loss_cont + loss_id + loss_color2gray
         else:
-            loss = loss_id + loss_tri + loss_color2gray + loss_hung #+ loss_twins #+ loss_center
+            loss = loss_id + loss_tri + loss_color2gray + loss_hung + loss_max #+ loss_twins #+ loss_center
 
         optimizer.zero_grad()
         loss.backward()
@@ -424,7 +424,7 @@ def train(epoch, step):
         id_loss.update(loss_id.item(), feat.size(0))
         tri_loss.update(loss_tri.item(), feat.size(0))
         gray_loss.update(loss_hung.item(), feat.size(0))
-        # center_loss.update(loss_cont.item(), feat.size(0))
+        center_loss.update(loss_max.item(), feat.size(0))
         total += labels.size(0)
 
         # measure elapsed time
