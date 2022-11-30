@@ -38,22 +38,25 @@ class LinearSumAssignment(nn.Module):
         bMask[maskTr < s[:, :, p : p + 1]] = 0
         bMask = bMask.view(mask.shape)
 
+        featMasked = feat2d * bMask
         featPos = feat2d[pos_ind]
         featNeg = feat2d[neg_ind]
         # featC, featI = torch.split(feat2d, b //2 , 0)
         # featPos =
-        simPos = feature_similarity(feat2d * bMask, featPos * bMask[pos_ind])
-        simNeg = feature_similarity(feat2d * bMask, featNeg * bMask[neg_ind])
+        simPos = feature_similarity(featMasked, featPos)
+        simPos_np = simPos.detach().cpu().numpy()
+        simNeg = feature_similarity(featMasked, featNeg)
+        simNeg_np = simNeg.detach().cpu().numpy()
         pos_dis = torch.empty(b, device=feat2d.device)
         neg_dis = torch.empty(b, device=feat2d.device)
         target = -1 * torch.ones(b, device=feat2d.device)
         i = 0
-        for simMatPos,simMatNeg in zip(simPos, simNeg):
+        for simMatPos,simMatNeg in zip(simPos_np, simNeg_np):
 
-            row_ind, col_ind = linear_sum_assignment(simMatPos.detach().cpu(), True)
-            pos_dis[i] = (1 - simMatPos[row_ind, col_ind].sum() / p)
-            row_ind, col_ind = linear_sum_assignment(simMatNeg.detach().cpu(), True)
-            neg_dis[i] = (1 - simMatNeg[row_ind, col_ind].sum() / p)
+            row_ind, col_ind = linear_sum_assignment(simMatPos, True)
+            pos_dis[i] = (1 - simPos[i][row_ind, col_ind].sum() / p)
+            row_ind, col_ind = linear_sum_assignment(simMatNeg, True)
+            neg_dis[i] = (1 - simNeg[i][row_ind, col_ind].sum() / p)
             i = i+1
 
         return self.criterion(pos_dis, neg_dis, target)
