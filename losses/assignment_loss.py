@@ -60,4 +60,4 @@ class LinearSumAssignment(nn.Module):
             i = i+1
 
         # return self.criterion(pos_dis, neg_dis, target)
-        return self.mean(pos_dis)
+        return self.pos_dis.mean()
