@@ -51,7 +51,7 @@ parser.add_argument('--img_h', default=288, type=int,
                     metavar='imgh', help='img height')
 parser.add_argument('--batch-size', default=8, type=int,
                     metavar='B', help='training batch size')
-parser.add_argument('--test-batch', default=64, type=int,
+parser.add_argument('--test-batch', default=32, type=int,
                     metavar='tb', help='testing batch size')
 parser.add_argument('--method', default='agw', type=str,
                     metavar='m', help='method type: base or agw')
@@ -72,6 +72,7 @@ parser.add_argument('--use_gray', dest='use_gray', help='use gray as 3rd modalit
 parser.add_argument('--separate_batch_norm', dest='separate_batch_norm', help='separate batch norm layers only in first layers',
                     action='store_true')
 parser.add_argument('--cont', dest='cont_loss', help='use Contrastive Loss', action='store_true')
+parser.add_argument('--is_test', help='use Contrastive Loss', action='store_true')
 parser.add_argument('--exp', '-e', default='', type=str, help='name of suffix exp')
 parser.set_defaults(use_gray=False)
 parser.set_defaults(separate_batch_norm=False)
@@ -553,13 +554,26 @@ for step in range(0, N):
                                       sampler=sampler, num_workers=args.workers, drop_last=True)
 
         # training
-        train(epoch, step)
+        if args.is_test is not True:
+            train(epoch, step)
 
         if epoch >= 0 and epoch % 4 == 0 or epoch >= (end_epoch - 1):
             print('Test Epoch: {}'.format(epoch))
 
             # testing
             cmc, mAP, mINP, cmc_att, mAP_att, mINP_att = test(epoch)
+
+            print(
+                'POOL:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}| mINP: {:.2%}'.format(
+                    cmc[0], cmc[4], cmc[9], cmc[19], mAP, mINP))
+            print(
+                'FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}| mINP: {:.2%}'.format(
+                    cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att, mINP_att))
+            print('Best Epoch [{},{}]'.format(best_epoch, best_step))
+
+            if args.is_test:
+                break
+
             # save model
             if max(mAP, mAP_att) > best_acc:  # not the real best for sysu-mm01
                 best_acc = max(mAP, mAP_att)
@@ -584,8 +598,6 @@ for step in range(0, N):
                 }
                 torch.save(state, checkpoint_path + suffix + '_epoch_{}-{}.t'.format(epoch, step))
 
-            print('POOL:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}| mINP: {:.2%}'.format(
-                cmc[0], cmc[4], cmc[9], cmc[19], mAP, mINP))
-            print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}| mINP: {:.2%}'.format(
-                cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att, mINP_att))
-            print('Best Epoch [{},{}]'.format(best_epoch, best_step))
+
+
+
