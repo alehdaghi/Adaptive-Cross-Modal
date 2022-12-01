@@ -569,7 +569,7 @@ for step in range(0, N):
             print(
                 'FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}| mINP: {:.2%}'.format(
                     cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att, mINP_att))
-            print('Best Epoch [{},{}]'.format(best_epoch, best_step))
+
 
             if args.is_test:
                 break
@@ -587,6 +587,7 @@ for step in range(0, N):
                     'epoch': epoch,
                 }
                 torch.save(state, checkpoint_path + suffix + '_best.t')
+                print('Best Epoch [{},{}]'.format(best_epoch, best_step))
 
             # save model
             if epoch > 10 and epoch % args.save_epoch == 0:
