@@ -169,7 +169,7 @@ def updateTransform(p):
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     normalize,
-    ChannelRandomErasing(probability = p, sl = 0.015, sh = 0.3)
+    # ChannelRandomErasing(probability = p, sl = 0.015, sh = 0.3)
 ])
 
 
@@ -392,11 +392,11 @@ def train(epoch, step):
             # p_inds2, n_inds2 = getHardIndices(feat, labels)
             loss_hung = torch.tensor(0.0, requires_grad=True, device=device)
 
-            rec_feat = GAP_WithotMaxes(feat2d)
-            loss_max = 2 * bs * reconst_loss(rec_feat, feat)
-            # loss_hung = hungarian_loss(feat2d, p_inds, n_inds)
+            # rec_feat = GAP_WithotMaxes(feat2d)
+            # loss_max = 2 * bs * reconst_loss(rec_feat, feat)
+            loss_hung = hungarian_loss(feat2d, p_inds, n_inds)
 
-            loss_hung = twinsloss(feat, feat[p_inds], labels)
+            loss_max = twinsloss(feat, feat[p_inds], labels)
 
             # featSame = einops.rearrange()
             # u, s, d = torch.pca_lowrank(feat, center=True)
