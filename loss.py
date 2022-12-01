@@ -484,11 +484,11 @@ def off_diagonal(x):
     return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
 class BarlowTwins_loss(nn.Module):
-    def __init__(self, batch_size, margin=0.3):
+    def __init__(self, batch_size, margin=0.3, d = 2048):
         super(BarlowTwins_loss, self).__init__()
         self.margin = margin
         self.ranking_loss = nn.MarginRankingLoss(margin=margin)
-
+        self.bn = nn.BatchNorm1d(d, affine=False)
         # projector
 
     def forward(self, feat_a, feat_b, targets):
@@ -501,10 +501,10 @@ class BarlowTwins_loss(nn.Module):
 
         # feat_V, feat_T = torch.chunk(inputs, 2, dim=0)
 
-        # z_a_norm = (feat_a - feat_a.mean(0)) / feat_a.std(0)  # NxD
-        # z_b_norm = (feat_b - feat_b.mean(0)) / feat_b.std(0)
+        # feat_a_norm = (feat_a - feat_a.mean(0)) / feat_a.std(0)  # NxD
+        # feat_b_norm = (feat_b - feat_b.mean(0)) / feat_b.std(0)
 
-        c = feat_a.T @ feat_b  # empirical cross-correlation matrix
+        c = self.bn(feat_a).T @ self.bn(feat_b)  # empirical cross-correlation matrix
 
         n = 2 * feat_a.size(0)
 
