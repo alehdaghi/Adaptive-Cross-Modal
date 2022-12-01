@@ -329,7 +329,7 @@ class embed_net(nn.Module):
         bMask = torch.ones_like(maskTr, dtype=int)
         bMask[maskTr < s[:, :, 40:41]] = 0
         bMask = bMask.view(mask.shape)
-        # x_pool = (x * bMask).view(x.shape[0], 2048, -1).mean(dim=2)
+        x_pool = (x * bMask).view(x.shape[0], 2048, -1).mean(dim=2)
         feat = self.bottleneck(x_pool)
 
         retX_pool = x_pool
