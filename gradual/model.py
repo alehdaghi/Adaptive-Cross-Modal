@@ -181,6 +181,16 @@ class base_resnet(nn.Module):
         s = count_parameters(self.resnet_part2)
         return s
 
+def compute_mask(feat):
+    batch_size, fdim, h, w = feat.shape
+    norms = torch.norm(feat, p=2, dim=1).view(batch_size, h * w)
+
+    norms -= norms.min(dim=-1, keepdim=True)[0]
+    norms /= norms.max(dim=-1, keepdim=True)[0] + 1e-12
+    mask = norms.view(batch_size, 1, h, w)
+
+    return mask.detach()
+
 class embed_net(nn.Module):
     def __init__(self,  class_num, no_local= 'off', gm_pool = 'off', arch='resnet50',
                  separate_batch_norm=False, use_contrast=False):
@@ -313,6 +323,13 @@ class embed_net(nn.Module):
             x_pool = self.avgpool(x)
             x_pool = x_pool.view(x_pool.size(0), x_pool.size(1))
 
+        mask = compute_mask(x)
+        maskTr = mask.view(mask.shape[0], 1, -1).clone()
+        s, i = torch.sort(maskTr, dim=2)
+        bMask = torch.ones_like(maskTr, dtype=int)
+        bMask[maskTr < s[:, :, 40:41]] = 0
+        bMask = bMask.view(mask.shape)
+        # x_pool = (x * bMask).view(x.shape[0], 2048, -1).mean(dim=2)
         feat = self.bottleneck(x_pool)
 
         retX_pool = x_pool
@@ -333,6 +350,8 @@ class embed_net(nn.Module):
         if self.training :
             return retX_pool, clsScore, cont_x
         else:
+
+
             return self.l2norm(x_pool), self.l2norm(feat)
 
     def getPoolDim(self):
