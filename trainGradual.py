@@ -3,6 +3,7 @@ import argparse
 import sys
 import time
 
+import einops
 import numpy as np
 import torch
 import torch.nn as nn
@@ -393,8 +394,14 @@ def train(epoch, step):
 
             rec_feat = GAP_WithotMaxes(feat2d)
             loss_max = 2 * bs * reconst_loss(rec_feat, feat)
-            loss_hung = hungarian_loss(feat2d, p_inds, n_inds)
+            # loss_hung = hungarian_loss(feat2d, p_inds, n_inds)
 
+            loss_hung = twinsloss(feat, feat[p_inds], labels)
+
+            # featSame = einops.rearrange()
+            # u, s, d = torch.pca_lowrank(feat, center=True)
+
+            # loss_hung = s.sum()
 
         loss_id = criterion_id(out0, labels)
         #loss_tri, batch_acc = criterion_tri(feat, labels)
@@ -524,6 +531,7 @@ ir_ids = np.empty(0, dtype=int)
 # training
 print('==> Start Training...')
 N = 1
+best_epoch, best_step = 0, 0
 for step in range(0, N):
     print('==> Step {}'.format(step))
     if step != -1:
@@ -587,7 +595,7 @@ for step in range(0, N):
                     'epoch': epoch,
                 }
                 torch.save(state, checkpoint_path + suffix + '_best.t')
-                print('Best Epoch [{},{}]'.format(best_epoch, best_step))
+
 
             # save model
             if epoch > 10 and epoch % args.save_epoch == 0:
@@ -598,7 +606,7 @@ for step in range(0, N):
                     'epoch': epoch,
                 }
                 torch.save(state, checkpoint_path + suffix + '_epoch_{}-{}.t'.format(epoch, step))
-
+            print('Best Epoch [{},{}]'.format(best_epoch, best_step))
 
 
 

@@ -491,7 +491,7 @@ class BarlowTwins_loss(nn.Module):
 
         # projector
 
-    def forward(self, inputs, targets):
+    def forward(self, feat_a, feat_b, targets):
 
         # normalization layer for the representations z1 and z2
         # z1 = nn.BatchNorm1d(input1)
@@ -499,10 +499,14 @@ class BarlowTwins_loss(nn.Module):
 
         # inputs = torch.tensor([item.cpu().detach().numpy() for item in inputs]).cuda()
 
-        feat_V, feat_T = torch.chunk(inputs, 2, dim=0)
-        c = feat_V.T @ feat_T  # empirical cross-correlation matrix
+        # feat_V, feat_T = torch.chunk(inputs, 2, dim=0)
 
-        n = inputs.size(0)
+        # z_a_norm = (feat_a - feat_a.mean(0)) / feat_a.std(0)  # NxD
+        # z_b_norm = (feat_b - feat_b.mean(0)) / feat_b.std(0)
+
+        c = feat_a.T @ feat_b  # empirical cross-correlation matrix
+
+        n = 2 * feat_a.size(0)
 
         c.div_(n) # sum the cross-correlation matrix between all gpus
 
