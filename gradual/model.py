@@ -313,6 +313,16 @@ class embed_net(nn.Module):
                     NL4_counter += 1
         else:
             x = self.base_resnet(x)
+
+        if self.training:
+            mask = compute_mask(x)
+            maskTr = mask.view(mask.shape[0], 1, -1).clone()
+            s, i = torch.sort(maskTr, dim=2)
+            bMask = torch.ones_like(maskTr, dtype=int)
+            bMask[maskTr < s[:, :, 40:41]] = 0
+            bMask = bMask.view(mask.shape)
+            x = (x * bMask)
+
         if self.gm_pool  == 'on':
             b, c, h, w = x.shape
             x = x.view(b, c, -1)
@@ -323,13 +333,8 @@ class embed_net(nn.Module):
             x_pool = self.avgpool(x)
             x_pool = x_pool.view(x_pool.size(0), x_pool.size(1))
 
-        mask = compute_mask(x)
-        maskTr = mask.view(mask.shape[0], 1, -1).clone()
-        s, i = torch.sort(maskTr, dim=2)
-        bMask = torch.ones_like(maskTr, dtype=int)
-        bMask[maskTr < s[:, :, 40:41]] = 0
-        bMask = bMask.view(mask.shape)
-        x_pool = (x * bMask).view(x.shape[0], 2048, -1).mean(dim=2)
+
+
         feat = self.bottleneck(x_pool)
 
         retX_pool = x_pool
